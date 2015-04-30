@@ -8,15 +8,26 @@
 #include "ui_facbuilding.h"
 #include <QWidget>
 #include <QGridLayout>
-#include <QLabel>
 #include <QPushButton>
 #include <qtextedit.h>
+#include <qaction.h>
+#include <qdebug.h>
 
-#include "CommandTextEdit.h"
-#include "Utility.h"
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <opencv2/imgproc/imgproc.hpp>
+
+#include "ImageLabel.h"
+#include "CommandTextEdit.h"
+#include "Utility.h"
+#include "Segmentation.h"
+
+//previous graph method
+#include "../3rdParty/graph/FacBuilder.h"
+#include "../3rdParty/graph/Basic_File.h"
+#include "../3rdParty/graph/Basics.h"
+#include "../3rdParty/graph/GraphMatching.h"
+#include "../3rdParty/graph/DP.h"
 
 using namespace cv;
 using namespace std;
@@ -25,17 +36,20 @@ class FacBuilding : public QMainWindow
 {
 	Q_OBJECT
 
+signals:
+	void sendCommand(QString cmd);
+
 public:
 	FacBuilding(QWidget *parent = 0);
 	~FacBuilding();
 
 	void myLayout(); //setup my own layout
-
+	void keyPressEvent(QKeyEvent* e);
 	//UI design
 	QWidget* window;
 	QGridLayout* gLayout; //8*9 layout in this UI
-	QLabel* testLabel;
-	QLabel* resultLabel;
+	ImageLabel* testLabel;
+	ImageLabel* resultLabel;
 	QPushButton* startButton;
 	QPushButton* button1;
 	QPushButton* button2;
@@ -49,11 +63,18 @@ public:
 	QPushButton* cmdButton1;
 	QPushButton* cmdButton2; 
 
-	Mat src;
-	Mat dst;
+	Mat src,src_temp;
+	Mat dst,dst_temp;
+	Segmentation* seg;
 
 private:
 	Ui::FacBuildingClass ui;
+	QAction* openAction;
+	Size labelsize;
+	vector<pair<char, int>> _axis; //the segment axis
+
+	void repaint(Mat& temp);
+	void showSegment(Mat& src, vector<pair<char, int>>& axis);
 
 private slots:
 	void on_startButton_clicked();
@@ -61,6 +82,12 @@ private slots:
 	void on_cmdButton2_clicked();
 
 	void on_CommandEdit_Entered();
+
+	void on_ImageLabel_rolling(QPoint angle);
+	void on_this_sendCmd(QString cmd);
+
+	void on_ImageLabel_mouseClick(QPoint pos);
+	void on_ImageLabel_mouseDrag(QPoint start, QPoint end);
 };
 
 #endif // FACBUILDING_H

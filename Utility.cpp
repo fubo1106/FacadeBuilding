@@ -37,7 +37,7 @@ QImage Utility::MatToQImage(const Mat& mat)
 QString Utility::getCommandLine(QString& plain){
 	string str,cmdline;
 	str = plain.toStdString();
-	
+
 	for (int i = str.length()-1; i >= 0; i--){
 
 		if (str[i] == '\n'){

@@ -33,3 +33,4 @@ void CommandTextEdit::executeCommand(){
 	int a = 0;
 	return;
 }
+
