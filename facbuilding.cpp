@@ -17,6 +17,8 @@ FacBuilding::FacBuilding(QWidget *parent)
 	testLabel = new ImageLabel();
 	resultLabel = new ImageLabel();
 	startButton = new QPushButton("start");
+	startButton->setShortcut(tr("ctrl+o"));
+
 	button1 = new QPushButton("start");
 	button2 = new QPushButton("start");
 	button3 = new QPushButton("start");
@@ -53,7 +55,8 @@ FacBuilding::FacBuilding(QWidget *parent)
 
 FacBuilding::~FacBuilding()
 {
-	delete seg;
+	if (seg != NULL)
+		delete seg;
 }
 
 void FacBuilding::myLayout(){
@@ -114,16 +117,17 @@ void FacBuilding::myLayout(){
 }
 
 void FacBuilding::on_startButton_clicked(){
-	QString fileName = QFileDialog::getOpenFileName(this, tr("Open Image"), ".", tr("ImageFile(*.jpg *.jpg *.bmp *.png)"));
+
+	QString fileName = QFileDialog::getOpenFileName(NULL, tr("Open Image"), ".", tr("ImageFile(*.jpg *.jpg *.bmp *.png)"));
 	
-	if (fileName != NULL){
+	if (fileName.length() != 0){
 		src = cv::imread(fileName.toStdString(),1);
 		//const uchar *qImageBuffer = (const uchar*)src.data;
 		//imshow("src", src);
 		/*QMovie *mov = new QMovie(fileName);
 		mov->start();
 		testLabel->setMovie(mov);*/
-
+		
 		//auto resize label 
 		if (src.cols >= src.rows)
 			labelsize = Size(WINDOW_W / 2, src.rows * WINDOW_W / (2 * src.cols));
@@ -141,7 +145,12 @@ void FacBuilding::on_startButton_clicked(){
 		//init
 		src_temp = src.clone();
 		dst_temp = dst.clone();
+		seg = new Segmentation(src, fileName.toStdString());
 	}
+	else
+		this->command->append("load image failed...");
+	
+	fileName = "";
 	return;
 }
 
@@ -176,13 +185,12 @@ void FacBuilding::on_this_sendCmd(QString commd){
 	//command parser
 	string cmd = commd.toStdString();
 	if (cmd == "segment"){
-
 		if (src.rows == 0){
 			this->command->append("error load source image.. Please reload image!!");
 			return;
 		}
-		seg = new Segmentation(src);
-		seg->ImageSegmentation(src, dst);
+
+		//seg->ImageSegmentation(src, dst);
 
 		Mat tempD = Mat(labelsize, CV_8UC3);
 		resultLabel->setFixedSize(QSize(tempD.cols, tempD.rows));
@@ -191,16 +199,31 @@ void FacBuilding::on_this_sendCmd(QString commd){
 		resultLabel->setPixmap(QPixmap::fromImage(dimage));
 
 		this->command->append("segmentation done!!");	
-		delete seg;
+		//delete seg;
 	}
+	if (cmd == "kmeans"){
+		if (src.rows != 0){
+			Mat result, centers, visual;
+			seg->kmeans_seg(src,result,centers,visual,5);
 
+			Mat tempD = Mat(labelsize, CV_8UC3);
+			resultLabel->setFixedSize(QSize(tempD.cols, tempD.rows));
+			cv::resize(visual, tempD, labelsize);
+			QImage dimage = Utility::MatToQImage(tempD);
+			resultLabel->setPixmap(QPixmap::fromImage(dimage));
+			this->command->append("K-means done..");
+
+			seg->save_kmeans("K-means");
+		}
+	
+	}
 	if (cmd == "s"){
-		seg = new Segmentation(src);
+		
 		repaint(src);
 		if (src.rows != 0){
 			//connect(testLabel, SIGNAL(mousepress(QPoint)), this, SLOT(on_ImageLabel_mouseClick(QPoint)));//connect user select}
 			connect(testLabel, SIGNAL(mousemove(QPoint, QPoint)), this, SLOT(on_ImageLabel_mouseDrag(QPoint, QPoint)));//connect user select
-			this->command->append(tr("please click some segment point...."));
+			this->command->append(tr("please drag some segments...."));
 		}
 		else{
 			this->command->append("Please reload image!!");

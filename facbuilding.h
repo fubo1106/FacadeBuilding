@@ -13,8 +13,8 @@
 #include <qaction.h>
 #include <qdebug.h>
 
-#include <opencv/cv.h>
-#include <opencv/highgui.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "ImageLabel.h"
@@ -62,10 +62,11 @@ public:
 	CommandTextEdit* command;
 	QPushButton* cmdButton1;
 	QPushButton* cmdButton2; 
-
+	
 	Mat src,src_temp;
 	Mat dst,dst_temp;
-	Segmentation* seg;
+
+	Segmentation* seg = NULL;
 
 private:
 	Ui::FacBuildingClass ui;

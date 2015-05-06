@@ -1,6 +1,10 @@
 #include "Segmentation.h"
 #include "Basics.h"
 
+#include <assert.h>
+#include <fstream>
+#include <iostream>
+
 Segmentation::Segmentation()
 {
 }
@@ -11,16 +15,24 @@ Segmentation::Segmentation(cv::Mat& src, cv::Mat& dst)
 	_dst = dst.clone(); 
 }
 
-Segmentation::Segmentation(cv::Mat& src)
+Segmentation::Segmentation(cv::Mat& src,string path)
 {
 	_src = src.clone();
+	int r = path.find_last_of('.');
+	
+	int l = path.find_last_of('/');
+	if (l == path.npos)
+		l = path.find_last_of('\\');
+	_baseName = path.substr(l + 1, r - l - 1);
 	calcAttribute();
 }
 
 Segmentation::~Segmentation()
 {
-	delete _rgradient;
-	delete _cgradient;
+	if (_rgradient != NULL)
+		delete _rgradient;
+	if (_cgradient != NULL)
+		delete _cgradient;
 }
 
 void Segmentation::calcAttribute(){
@@ -62,6 +74,7 @@ void Segmentation::calcAttribute(){
 		}
 	}
 
+	//test gradient
 	/*Mat visual = Mat::zeros(_src.rows, _src.cols, CV_8UC1);
 	for (int j = 0; j < _src.cols; j++){
 		for (int i = 0; i < _src.rows; i++){
@@ -70,6 +83,9 @@ void Segmentation::calcAttribute(){
 	}
 	imshow("visual", visual);
 	waitKey(0);*/
+
+	//init _baseName
+
 
 }
 
@@ -208,9 +224,111 @@ void Segmentation::saveSegments(Mat& src, vector<pair<char, int>>& axis, string 
 			Rect rect(ay[j], ax[i], ay[j + 1] - ay[j], ax[i + 1] - ax[i]);
 			imageroi = src(rect);
 			//imshow("roi", imageroi); waitKey(0);
-			imwrite(dir+"\\part-[" + boost::lexical_cast<string>(i)+"," + boost::lexical_cast<string>(j)+"].jpg", imageroi);
+			if (!boost::filesystem::exists(dir +"\\"+_baseName))
+				boost::filesystem::create_directories(dir +"\\"+ _baseName);
+			imwrite(dir+"\\"+_baseName+"\\part-[" + boost::lexical_cast<string>(i)+"," + boost::lexical_cast<string>(j)+"].jpg", imageroi);
 		}
 	}
 
+	return;
+}
+
+void Segmentation::kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, int nclusters){
+
+	assert(src.channels() == 3); 
+	assert(src.rows > 0);
+
+	result = Mat(src.rows, src.cols, CV_8UC1);
+	visual = Mat(src.rows, src.cols, CV_8UC3);
+	RNG rng(12345); //随机数产生器
+
+	Scalar colorTab[] =     //最多只有10类，所以最多也就给10个颜色
+	{
+		Scalar(255, 0, 0), //blue #696969 105, 105, 105
+		Scalar(0, 255, 0),	//green #B8860B 184,134,11
+		Scalar(0, 0, 255),	//red #006400 0,100,0
+		Scalar(196, 228, 255),	//陶坯黄 #FFE4C4 255,228,196
+		Scalar(42, 42, 165),	//棕色 #A52A2A 165,42,42
+		Scalar(144, 238, 144),	//淡绿色 #90EE90 144,238,144
+		Scalar(128, 0, 0),	//海军蓝 #000080 0,0,128
+		Scalar(0, 0, 128),	//栗色 #800000 128,0,0
+		Scalar(0, 0, 139),	//深红色 #8B0000 139,0,0
+		Scalar(235, 206, 235)	//天蓝色 #87CEEB 135,206,235
+	};
+
+	int k, clusterCount = nclusters;
+	int i, sampleCount = src.rows*src.cols;//样本数大小
+
+	Mat points(sampleCount, 3, CV_32FC1), labels;   //产生的样本数，
+	clusterCount = MIN(clusterCount, sampleCount);
+	//centers = Mat(clusterCount, 1, points.type());    //用来存储聚类后的中心点
+
+	for (int i = 0; i < src.rows; i++)
+		for (int j = 0; j < src.cols; j++){
+
+			Vec3b ss = src.at<Vec3b>(i, j);
+			points.at<float>(i*src.cols + j,0) = (float)ss[0];
+			points.at<float>(i*src.cols + j,1) = (float)ss[1];
+			points.at<float>(i*src.cols + j,2) = (float)ss[2];
+
+		}
+
+	//randShuffle(points, 1, &rng);   //因为要聚类，所以先随机打乱points里面的点，注意points和pointChunk是共用数据的。
+
+	/*points: one rows per sample;type=float point matrix; for images rows=numPixels, col=channels
+	  labels: size=[rows,1], record labels for each sample[row]
+	  centers: size=[nclusters,cols], record ncluster centers
+	  */
+	kmeans(points, clusterCount, labels,
+		TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 10, 1.0),
+
+		3, KMEANS_PP_CENTERS, centers);  //聚类3次，取结果最好的那次，聚类的初始化采用PP特定的随机算法。
+
+	visual = src.clone();
+	for (int i = 0; i < visual.rows; i++)
+		for (int j = 0; j < visual.cols; j++){
+			int clusterIdx = labels.at<int>(i*src.cols+j);
+			int s0 = (int)centers.at<float>(clusterIdx, 0);
+			int s1 = (int)centers.at<float>(clusterIdx, 1);
+			int s2 = (int)centers.at<float>(clusterIdx, 2);
+
+			Vec3b v = Vec3b(colorTab[clusterIdx][0], colorTab[clusterIdx][1], colorTab[clusterIdx][2]);
+			//visual.at<Vec3b>(i, j) = Vec3b(s0, s1, s2); //center color
+			visual.at<Vec3b>(i, j) = v; //my color
+			result.at<uchar>(i, j) = clusterIdx;
+		}
+
+	_kmeans_res = result.clone();
+	_kmeans_centers = centers.clone();
+	_kmeans_ncluster = nclusters;
+	//namedWindow("cluster", 0);
+	//imshow("cluster", visual); waitKey();
+	return;
+}
+
+void Segmentation::save_kmeans(string dir){
+	
+	if (!boost::filesystem::exists(dir + "\\" + _baseName))
+		boost::filesystem::create_directories(dir + "\\" + _baseName);
+
+	ofstream ofs1(dir + "\\" + _baseName + "\\labels.txt");
+	ofstream ofs2(dir + "\\" + _baseName + "\\centers.txt");
+
+	for (int i = 0; i < _kmeans_res.rows; i++){
+		for (int j = 0; j < _kmeans_res.cols; j++)
+			ofs1 << (int)_kmeans_res.at<uchar>(i, j) << " ";
+		ofs1 << endl;
+	}
+		
+		
+	for (int i = 0; i < _kmeans_centers.rows; i++){
+		for (int j = 0; j < _kmeans_centers.cols; j++)
+			ofs2 << (int)_kmeans_centers.at<float>(i, j) << " ";
+		ofs2 << endl;
+	}
+	
+
+	ofs1.close();
+	ofs2.close();
 	return;
 }
