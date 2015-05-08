@@ -5,10 +5,6 @@
 #include <fstream>
 #include <iostream>
 
-Segmentation::Segmentation()
-{
-}
-
 Segmentation::Segmentation(cv::Mat& src, cv::Mat& dst)
 {
 	_src = src.clone();
@@ -233,6 +229,40 @@ void Segmentation::saveSegments(Mat& src, vector<pair<char, int>>& axis, string 
 	return;
 }
 
+/*kmeans_seg each jpg images*/
+void Segmentation::kmeans_seg_folder(string srcDir,string dstDir){
+	int nclusters = 5;
+
+	if (!boost::filesystem::exists(srcDir)){
+		cout << "src directory not exists";
+		return;
+	}
+
+	fs::path fullpath(srcDir, fs::native);
+	if (!fs::exists(fullpath)) return;
+
+	fs::recursive_directory_iterator end_iter;
+	for (fs::recursive_directory_iterator iter(fullpath); iter != end_iter; iter++)
+	{
+		if (!fs::is_directory(*iter)){
+			//cout << "current image" << iter->path().string() << endl;
+			string currentImagePath = iter->path().string();
+			string currentImageS = iter->path().filename().string();
+			_baseName = currentImageS.substr(0, currentImageS.find_first_of('.'));
+			string ext = currentImageS.substr(currentImageS.find_first_of('.')+1, currentImageS.length()-1);
+			if (ext == "jpg"){
+				Mat img = imread(currentImagePath, 1);
+				_src = img;
+				Mat result, centers, visual;
+				kmeans_seg(img, result, centers, visual, nclusters);
+				save_kmeans(dstDir);
+			}
+			else continue;
+			
+		}
+	}
+}
+
 void Segmentation::kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, int nclusters){
 
 	assert(src.channels() == 3); 
@@ -301,6 +331,7 @@ void Segmentation::kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, 
 	_kmeans_res = result.clone();
 	_kmeans_centers = centers.clone();
 	_kmeans_ncluster = nclusters;
+	_kmeans_nSamples = sampleCount;
 	//namedWindow("cluster", 0);
 	//imshow("cluster", visual); waitKey();
 	return;
@@ -308,11 +339,20 @@ void Segmentation::kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, 
 
 void Segmentation::save_kmeans(string dir){
 	
-	if (!boost::filesystem::exists(dir + "\\" + _baseName))
-		boost::filesystem::create_directories(dir + "\\" + _baseName);
+	if (!boost::filesystem::exists(dir + _baseName))
+		boost::filesystem::create_directories(dir + _baseName);
 
-	ofstream ofs1(dir + "\\" + _baseName + "\\labels.txt");
-	ofstream ofs2(dir + "\\" + _baseName + "\\centers.txt");
+	if (boost::filesystem::exists(dir + _baseName + "\\labels.txt") &&
+		boost::filesystem::exists(dir + _baseName + "\\centers.txt") &&
+		boost::filesystem::exists(dir + _baseName + "\\scolor.txt") &&
+	//	boost::filesystem::exists(dir + _baseName + "\\gPb.mat") &&
+		boost::filesystem::exists(dir + _baseName + "\\label_weight.txt"))
+		return;//already exist 
+
+	ofstream ofs1(dir + _baseName + "\\labels.txt");
+	ofstream ofs2(dir + _baseName + "\\centers.txt");
+	ofstream ofs3(dir + _baseName + "\\scolor.txt");
+	ofstream ofs4(dir + _baseName + "\\label_weight.txt");
 
 	for (int i = 0; i < _kmeans_res.rows; i++){
 		for (int j = 0; j < _kmeans_res.cols; j++)
@@ -326,9 +366,96 @@ void Segmentation::save_kmeans(string dir){
 			ofs2 << (int)_kmeans_centers.at<float>(i, j) << " ";
 		ofs2 << endl;
 	}
+
+	for (int i = 0; i < _src.rows; i++){
+		for (int j = 0; j < _src.cols; j++){
+			ofs3 << (int)_src.at<Vec3b>(i, j)[0] << " "
+				<< (int)_src.at<Vec3b>(i, j)[1] << " "
+				<< (int)_src.at<Vec3b>(i, j)[2] << endl;
+		}
+		
+	}
+
+	for (int i = 0; i < _src.rows; i++){
+		for (int j = 0; j < _src.cols; j++){
+			Vec3b s = _src.at<Vec3b>(i, j);
+			Point3i pix = Point3i((int)s[0], (int)s[1], (int)s[2]);
+			for (int k = 0; k < _kmeans_centers.rows; k++){//calc distance between each pixel and each cluster center
+				Point3i center = Point3i((int)_kmeans_centers.at<float>(k, 0), (int)_kmeans_centers.at<float>(k, 1), (int)_kmeans_centers.at<float>(k, 2));
+				ofs4 << distanceP2P(pix,center) << " ";
+			}
+			ofs4 << endl;
+		}
 	
+	}
 
 	ofs1.close();
 	ofs2.close();
+	ofs3.close();
+	ofs4.close();
 	return;
+}
+
+void Segmentation::gco_seg(){
+	gcoUtil *gco = new gcoUtil(_src.rows, _src.cols);
+	string label_file = "K-means\\" + _baseName + "\\labels.txt";
+	string weight_file = "K-means\\" + _baseName + "\\label_weight.txt";
+	string gpb_file = "K-means\\" + _baseName + "\\gPb.txt";
+	string color_file = "K-means\\" + _baseName + "\\scolor.txt";
+	string center_file = "K-means\\" + _baseName + "\\centers.txt";
+
+	gco->initial_data(label_file,weight_file,gpb_file,color_file,center_file,_src.cols/2);
+	gco->build_general_graph();
+	gco->solve_general_graph();
+	//gco->read_labels("K-means\\" + _baseName + "\\labels.txt");
+	//gco->read_label_center("K-means\\" + _baseName + "\\centers.txt");
+
+	//visualization
+
+	Scalar colorTab[] =     //最多只有10类，所以最多也就给10个颜色
+	{
+		Scalar(255, 0, 0), //blue #696969 105, 105, 105
+		Scalar(0, 255, 0),	//green #B8860B 184,134,11
+		Scalar(0, 0, 255),	//red #006400 0,100,0
+		Scalar(196, 228, 255),	//陶坯黄 #FFE4C4 255,228,196
+		Scalar(42, 42, 165),	//棕色 #A52A2A 165,42,42
+		Scalar(144, 238, 144),	//淡绿色 #90EE90 144,238,144
+		Scalar(128, 0, 0),	//海军蓝 #000080 0,0,128
+		Scalar(0, 0, 128),	//栗色 #800000 128,0,0
+		Scalar(0, 0, 139),	//深红色 #8B0000 139,0,0
+		Scalar(235, 206, 235)	//天蓝色 #87CEEB 135,206,235
+	};
+
+	namedWindow("before optimization", 0);
+	namedWindow("after optimization", 0);
+
+	Mat be = _src.clone();
+	Mat af = _src.clone();
+
+	for (int i = 0; i < _src.rows; i++)
+		for (int j = 0; j < _src.cols; j++){
+			int label_b = (int)gco->init_labels(i, j);
+			int label_a = (int)gco->result_labels(i, j);
+
+			int s0 = (int)colorTab[label_b][0];
+			int s1 = (int)colorTab[label_b][1];
+			int s2 = (int)colorTab[label_b][2];
+
+			int s00 = (int)colorTab[label_a][0];
+			int s11 = (int)colorTab[label_a][1];
+			int s22 = (int)colorTab[label_a][2];
+
+			Vec3b v1 = Vec3b(s0,s1,s2);
+			Vec3b v2 = Vec3b(s00, s11, s22);
+
+			be.at<Vec3b>(i, j) = v1;
+			af.at<Vec3b>(i, j) = v2;
+
+		}
+
+	imshow("before optimization", be);
+	imshow("after optimization", af);
+	waitKey();
+
+	delete gco;
 }

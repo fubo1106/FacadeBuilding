@@ -202,19 +202,22 @@ void FacBuilding::on_this_sendCmd(QString commd){
 		//delete seg;
 	}
 	if (cmd == "kmeans"){
-		if (src.rows != 0){
+		//if (src.rows != 0){
 			Mat result, centers, visual;
-			seg->kmeans_seg(src,result,centers,visual,5);
 
-			Mat tempD = Mat(labelsize, CV_8UC3);
+			/*seg->kmeans_seg(src,result,centers,visual,5);
+			seg->save_kmeans("K-means");*/
+			//seg->kmeans_seg_folder("data\\", "K-means\\");
+
+			/*Mat tempD = Mat(labelsize, CV_8UC3);
 			resultLabel->setFixedSize(QSize(tempD.cols, tempD.rows));
 			cv::resize(visual, tempD, labelsize);
 			QImage dimage = Utility::MatToQImage(tempD);
 			resultLabel->setPixmap(QPixmap::fromImage(dimage));
-			this->command->append("K-means done..");
+			this->command->append("K-means done..");*/
 
-			seg->save_kmeans("K-means");
-		}
+			seg->gco_seg();
+		//}
 	
 	}
 	if (cmd == "s"){

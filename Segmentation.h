@@ -3,13 +3,14 @@
 #include <opencv/highgui.h>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include "Util\gcoUtil.h"
+
 using namespace cv;
 using namespace std;
 
 class Segmentation
 {
 public:
-	Segmentation();
 	Segmentation(cv::Mat& src,string path);
 	Segmentation(cv::Mat& src, cv::Mat& dst);
 	~Segmentation();
@@ -21,7 +22,7 @@ public:
 	int getBestSegAxis(char whichaxis, int userselected);
 	void saveSegments(Mat& src, vector<pair<char, int>>& axis,string dir);
 
-
+	void kmeans_seg_folder(string srcDir, string dstDir);
 
 	/*src: input image
 	  result: CV_8UC1 same size to input, result.at<int>(i,j) record cluster label for pixel(i,j)
@@ -31,6 +32,9 @@ public:
 	void kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, int nclusters);
 	void save_kmeans(string dir);
 
+	/*gco segmentation*/
+	void gco_seg();
+
 private:
 	double* _rgradient = NULL;
 	double* _cgradient = NULL;
@@ -39,6 +43,7 @@ private:
 	//k-means variables
 	Mat _kmeans_res, _kmeans_centers;
 	int _kmeans_ncluster;
+	int _kmeans_nSamples;
 
 	void calcAttribute(); //calc attributr based on _src
 };
