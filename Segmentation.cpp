@@ -404,7 +404,7 @@ void Segmentation::gco_seg(){
 	string color_file = "K-means\\" + _baseName + "\\scolor.txt";
 	string center_file = "K-means\\" + _baseName + "\\centers.txt";
 
-	gco->initial_data(label_file,weight_file,gpb_file,color_file,center_file,_src.cols/2);
+	gco->initial_data(label_file,weight_file,gpb_file,color_file,center_file,(_src.cols-1)/2);
 	gco->build_general_graph();
 	gco->solve_general_graph();
 	//gco->read_labels("K-means\\" + _baseName + "\\labels.txt");
