@@ -32,8 +32,10 @@ public:
 	void kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, int nclusters);
 	void save_kmeans(string dir);
 
+	gcoUtil* gcoSeg;
+	bool init_gco = false;
 	/*gco segmentation*/
-	void gco_seg();
+	void gco_seg(double smooth_sym,double smooth_grid);
 
 private:
 	double* _rgradient = NULL;

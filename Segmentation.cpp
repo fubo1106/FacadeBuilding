@@ -396,17 +396,30 @@ void Segmentation::save_kmeans(string dir){
 	return;
 }
 
-void Segmentation::gco_seg(){
-	gcoUtil *gco = new gcoUtil(_src.rows, _src.cols);
-	string label_file = "K-means\\" + _baseName + "\\labels.txt";
-	string weight_file = "K-means\\" + _baseName + "\\label_weight.txt";
-	string gpb_file = "K-means\\" + _baseName + "\\gPb.txt";
-	string color_file = "K-means\\" + _baseName + "\\scolor.txt";
-	string center_file = "K-means\\" + _baseName + "\\centers.txt";
+void Segmentation::gco_seg(double smooth_sym, double smooth_grid) {
 
-	gco->initial_data(label_file,weight_file,gpb_file,color_file,center_file,(_src.cols-1)/2);
-	gco->build_general_graph();
-	gco->solve_general_graph();
+	//if (!init_gco){
+		gcoSeg = new gcoUtil(_src.rows, _src.cols);
+		string label_file = "K-means\\" + _baseName + "\\labels.txt";
+		string weight_file = "K-means\\" + _baseName + "\\label_weight.txt";
+		string gpb_file = "K-means\\" + _baseName + "\\gPb.txt";
+		string color_file = "K-means\\" + _baseName + "\\scolor.txt";
+		string center_file = "K-means\\" + _baseName + "\\centers.txt";
+
+		gcoSeg->smooth_sym = smooth_sym;
+		gcoSeg->smooth_grid = smooth_grid;
+
+		gcoSeg->initial_data(label_file, weight_file, gpb_file, color_file, center_file, (_src.cols - 1) / 2);
+		gcoSeg->set_neighbors();
+		gcoSeg->build_general_graph();
+		init_gco = true;
+	//}
+	/*else{
+		gcoSeg->smooth_sym = v;
+		gcoSeg->set_sym_neighbors();
+	}*/
+	
+	gcoSeg->solve_general_graph();
 	//gco->read_labels("K-means\\" + _baseName + "\\labels.txt");
 	//gco->read_label_center("K-means\\" + _baseName + "\\centers.txt");
 
@@ -426,16 +439,16 @@ void Segmentation::gco_seg(){
 		Scalar(235, 206, 235)	//ÌìÀ¶É« #87CEEB 135,206,235
 	};
 
-	namedWindow("before optimization", 0);
-	namedWindow("after optimization", 0);
+	//namedWindow("before optimization", 0);
+	//namedWindow("after optimization", 0);
 
 	Mat be = _src.clone();
 	Mat af = _src.clone();
 
 	for (int i = 0; i < _src.rows; i++)
 		for (int j = 0; j < _src.cols; j++){
-			int label_b = (int)gco->init_labels(i, j);
-			int label_a = (int)gco->result_labels(i, j);
+			int label_b = (int)gcoSeg->init_labels(i, j);
+			int label_a = (int)gcoSeg->result_labels(i, j);
 
 			int s0 = (int)colorTab[label_b][0];
 			int s1 = (int)colorTab[label_b][1];
@@ -452,10 +465,10 @@ void Segmentation::gco_seg(){
 			af.at<Vec3b>(i, j) = v2;
 
 		}
+	_dst = af.clone();
+	//imshow("before optimization", be);
+	//imshow("after optimization", af);
+	//waitKey();
 
-	imshow("before optimization", be);
-	imshow("after optimization", af);
-	waitKey();
-
-	delete gco;
+	delete gcoSeg;
 }

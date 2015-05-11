@@ -10,6 +10,7 @@
 #include <QGridLayout>
 #include <QPushButton>
 #include <qtextedit.h>
+#include <qslider.h>
 #include <qaction.h>
 #include <qdebug.h>
 
@@ -47,24 +48,33 @@ public:
 	void keyPressEvent(QKeyEvent* e);
 	//UI design
 	QWidget* window;
-	QGridLayout* gLayout; //8*9 layout in this UI
+	QGridLayout* gLayout; //10*20 layout in this UI
 	ImageLabel* testLabel;
+	ImageLabel* tempLabel; 
 	ImageLabel* resultLabel;
 	QPushButton* startButton;
-	QPushButton* button1;
-	QPushButton* button2;
+
+	QSlider* slider1;
+	QSlider* slider2;
+
 	QPushButton* button3;
 	QPushButton* button4;
 	QPushButton* button5;
 	QPushButton* button6;
 	QPushButton* button7;
 
+
+	QLabel *symAttri = new QLabel("sym:");//=string"sym:"
+	QLabel *edgeAttri = new QLabel("edge:");
+	QLabel *symvalue, *gridvalue;
+
 	CommandTextEdit* command;
 	QPushButton* cmdButton1;
 	QPushButton* cmdButton2; 
-	
+
 	Mat src,src_temp;
 	Mat dst,dst_temp;
+	Mat tmp;
 
 	Segmentation* seg = NULL;
 
@@ -74,7 +84,11 @@ private:
 	Size labelsize;
 	vector<pair<char, int>> _axis; //the segment axis
 
-	void repaint(Mat& temp);
+	QLabel *_srcLabel = new QLabel("src"), 
+		   *_tmpLabel = new QLabel("kmeans"), 
+		   *_dstLabel = new QLabel("gco segmentation");
+
+	void repaint();
 	void showSegment(Mat& src, vector<pair<char, int>>& axis);
 
 private slots:
@@ -89,6 +103,10 @@ private slots:
 
 	void on_ImageLabel_mouseClick(QPoint pos);
 	void on_ImageLabel_mouseDrag(QPoint start, QPoint end);
+
+	void on_sym_valuechanged(int v);
+	void on_grid_valuechanged(int v);
+	void on_sym_released();
 };
 
 #endif // FACBUILDING_H
