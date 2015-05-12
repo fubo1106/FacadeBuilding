@@ -5,6 +5,10 @@
 #include <fstream>
 #include <iostream>
 
+Segmentation::Segmentation(){
+
+}
+
 Segmentation::Segmentation(cv::Mat& src, cv::Mat& dst)
 {
 	_src = src.clone();

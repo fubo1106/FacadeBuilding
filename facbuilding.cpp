@@ -18,13 +18,13 @@ FacBuilding::FacBuilding(QWidget *parent)
 	resultLabel = new ImageLabel();
 	tempLabel = new ImageLabel();
 
-	startButton = new QPushButton("start");
+	startButton = new QPushButton;
 	startButton->setShortcut(tr("ctrl+o"));
 
 	slider1 = new QSlider(Qt::Horizontal);
 	slider2 = new QSlider(Qt::Horizontal);
 
-	button3 = new QPushButton("start3");
+	selectFolder = new QPushButton;
 	button4 = new QPushButton("start4");
 	button5 = new QPushButton("start5");
 	button6 = new QPushButton("start6");
@@ -33,7 +33,7 @@ FacBuilding::FacBuilding(QWidget *parent)
 	cmdButton1 = new QPushButton("excute1");
 	cmdButton2 = new QPushButton("clear");
 	
-	button3->setEnabled(false);
+	selectFolder->setEnabled(true);
 	button4->setEnabled(false);
 	button5->setEnabled(false);
 	button6->setEnabled(false);
@@ -47,6 +47,7 @@ FacBuilding::FacBuilding(QWidget *parent)
 	gridvalue = new QLabel(tr("11"));
 
 	connect(startButton, SIGNAL(clicked()), this, SLOT(on_startButton_clicked()));
+	connect(selectFolder, SIGNAL(clicked()), this, SLOT(on_selectFolderButton_clicked()));
 	connect(cmdButton1, SIGNAL(clicked()), this, SLOT(on_cmdButton1_clicked()));
 	connect(cmdButton2, SIGNAL(clicked()), this, SLOT(on_cmdButton2_clicked()));
 	connect(command, SIGNAL(pressEnter()), this, SLOT(on_CommandEdit_Entered()));
@@ -99,7 +100,7 @@ void FacBuilding::myLayout(){
 	_tmpLabel->setFixedHeight(WINDOW_H / 50);
 	_dstLabel->setFixedHeight(WINDOW_H / 50);
 
-	startButton->setText("start");
+	startButton->setText("open Image");
 	
 	slider1->setLayoutDirection(Qt::LayoutDirection::RightToLeft);
 	slider1->setMinimum(0);
@@ -117,7 +118,7 @@ void FacBuilding::myLayout(){
 	slider2->setValue(10);
 	slider2->setEnabled(false);
 
-	button3->setText("start");
+	selectFolder->setText("select Folder");
 	button4->setText("start4");
 	button5->setText("start5");
 	button6->setText("start6");
@@ -133,17 +134,18 @@ void FacBuilding::myLayout(){
 	gLayout->addWidget(resultLabel, 0, 13, 5, 6);
 
 	//labels
-	gLayout->addWidget(_srcLabel, 5, 2, 1, 1);
-	gLayout->addWidget(_tmpLabel, 5, 8, 1, 1);
-	gLayout->addWidget(_dstLabel, 5, 15, 1, 1);
+	gLayout->addWidget(_srcLabel, 4, 2, 1, 1);
+	gLayout->addWidget(_tmpLabel, 4, 8, 1, 1);
+	gLayout->addWidget(_dstLabel, 4, 15, 1, 1);
 
-	gLayout->addWidget(startButton, 6, 0, 1, 1);
-	gLayout->addWidget(symAttri, 6, 1, 1, 1);
-	gLayout->addWidget(slider1, 6, 2, 1, 1);
-	gLayout->addWidget(symvalue, 6, 3, 1, 1);
-	gLayout->addWidget(edgeAttri, 6, 4, 1, 1);
-	gLayout->addWidget(slider2, 6, 5, 1, 1);
-	gLayout->addWidget(gridvalue, 6, 6, 1, 1);
+	gLayout->addWidget(startButton, 5, 0, 1, 1);
+	gLayout->addWidget(selectFolder, 5, 1, 1, 1);
+	gLayout->addWidget(symAttri, 5, 2, 1, 1);
+	gLayout->addWidget(slider1, 5, 3, 1, 2);
+	gLayout->addWidget(symvalue, 5, 5, 1, 1);
+	gLayout->addWidget(edgeAttri, 5, 6, 1, 1);
+	gLayout->addWidget(slider2, 5, 7, 1, 2);
+	gLayout->addWidget(gridvalue, 5, 9, 1, 1);
 
 	//gLayout->addWidget(blank, 5, 5, 1, 15);
 	//gLayout->addWidget(button3, 4, 3, 1, 1);
@@ -152,7 +154,7 @@ void FacBuilding::myLayout(){
 	//gLayout->addWidget(button6, 4, 7, 1, 1);
 	//gLayout->addWidget(button7, 4, 8, 1, 1);
 	
-	gLayout->addWidget(command, 7, 0, 3, 8);
+	gLayout->addWidget(command, 6, 0, 3, 8);
 	
 	//gLayout->addWidget(cmdButton1, 7, 8, 1, 1);
 	//gLayout->addWidget(cmdButton2, 8, 8, 1, 1);
@@ -202,6 +204,27 @@ void FacBuilding::on_startButton_clicked(){
 	
 	fileName = "";
 	return;
+}
+
+void FacBuilding::on_selectFolderButton_clicked(){
+	QString fileName = QFileDialog::getOpenFileName(NULL, tr("Open Image"), "data\\", tr("ImageFile(*.jpg *.bmp *.png)"));
+	string str = fileName.toStdString();
+
+	int s=0, e=0;
+	for (int i = 0; i < str.length(); i++){
+		if (str.at(i) == '/'){
+			s = e;
+			e = i;
+		}
+	}
+	string currentDir = str.substr(s + 1, e - s - 1);
+
+	if (seg != NULL)
+		delete seg;
+	seg = new Segmentation();
+	seg->kmeans_seg_folder("data\\" + currentDir+"\\", "K-means\\");
+	return;
+
 }
 
 void FacBuilding::on_cmdButton1_clicked(){
@@ -257,7 +280,7 @@ void FacBuilding::on_this_sendCmd(QString commd){
 			connect(slider1, SIGNAL(mouseReleaseEvent(QMouseEvent*)), this, SLOT(on_sym_released(int)));
 			seg->kmeans_seg(src,result,centers,visual,5);
 			tmp = visual.clone();
-			//seg->save_kmeans("K-means");
+			seg->save_kmeans("K-means\\");
 			//seg->kmeans_seg_folder("data\\", "K-means\\");
 			this->command->append("K-means done..");
 			repaint();

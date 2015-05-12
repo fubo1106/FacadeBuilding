@@ -57,7 +57,7 @@ public:
 	QSlider* slider1;
 	QSlider* slider2;
 
-	QPushButton* button3;
+	QPushButton* selectFolder;
 	QPushButton* button4;
 	QPushButton* button5;
 	QPushButton* button6;
@@ -95,6 +95,7 @@ private slots:
 	void on_startButton_clicked();
 	void on_cmdButton1_clicked();
 	void on_cmdButton2_clicked();
+	void on_selectFolderButton_clicked();
 
 	void on_CommandEdit_Entered();
 

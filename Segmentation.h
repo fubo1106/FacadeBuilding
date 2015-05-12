@@ -11,6 +11,7 @@ using namespace std;
 class Segmentation
 {
 public:
+	Segmentation();
 	Segmentation(cv::Mat& src,string path);
 	Segmentation(cv::Mat& src, cv::Mat& dst);
 	~Segmentation();
