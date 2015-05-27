@@ -4,23 +4,28 @@
 #include <qmovie.h>
 #include <qpixmap.h>
 #include <qmenu.h>
-
 #include <sstream>
 
+extern QtAPI QtApi;
+
 FacBuilding::FacBuilding(QWidget *parent)
-	: QMainWindow(parent)
+	: QWidget(parent)
 {
 	//ui.setupUi(this);
-	window = new QWidget;
+	//window = new QWidget;
 	gLayout = new QGridLayout;
 
 	testLabel = new ImageLabel();
 	resultLabel = new ImageLabel();
 	tempLabel = new ImageLabel();
 
+	testArea = new QScrollArea();
+	tempArea = new QScrollArea();
+	resultArea = new QScrollArea();
+
 	startButton = new QPushButton;
 	startButton->setShortcut(tr("ctrl+o"));
-
+	
 	slider1 = new QSlider(Qt::Horizontal);
 	slider2 = new QSlider(Qt::Horizontal);
 
@@ -57,44 +62,64 @@ FacBuilding::FacBuilding(QWidget *parent)
 
 	connect(slider1, SIGNAL(valueChanged(int)), this, SLOT(on_sym_valuechanged(int)));
 	connect(slider2, SIGNAL(valueChanged(int)), this, SLOT(on_grid_valuechanged(int)));
+	connect(&QtApi, SIGNAL(message(string)), this, SLOT(showMsg(string)));
 
-	ui.setupUi(this);
+	log.open("../log/" + getTime() + ".log");
+
+//	this->se.setupUi(this);
 }
 
 FacBuilding::~FacBuilding()
 {
 	if (seg != NULL)
 		delete seg;
+	log.close();
 }
 
 void FacBuilding::myLayout(){
 	
-	window->setWindowTitle("FacBuilding");
+	this->setWindowTitle("FacBuilding");
 	//window->setWindowState(Qt::WindowMaximized);
-	window->setGeometry(150, 100, WINDOW_W, WINDOW_H);
+	this->setGeometry(150, 100, WINDOW_W, WINDOW_H);
+	//window->showMaximized();
+	//window->setFixedSize(window->width(),window->height());
 
 	testLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	testLabel->setFrameShape(QFrame::Box);
 	testLabel->setAutoFillBackground(true);
 	testLabel->setScaledContents(true);
-	testLabel->setFixedWidth(WINDOW_W / 3);
+	//testLabel->setFixedWidth(WINDOW_W / 3);
+	//testLabel->setMaximumHeight(WINDOW_H / 2);
 	testLabel->setText("testImage");
 	testLabel->setFocusPolicy(Qt::ClickFocus);
+	//testLabel->setFixedSize(WINDOW_W / 3, WINDOW_H);
 
 	tempLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	tempLabel->setFrameShape(QFrame::Box);
 	tempLabel->setAutoFillBackground(true);
 	tempLabel->setScaledContents(true);
-	tempLabel->setFixedWidth(WINDOW_W / 3);
+//	tempLabel->setFixedWidth(WINDOW_W / 3);
+	//tempLabel->setMaximumHeight(WINDOW_H / 2);
 	tempLabel->setText("tmpImage");
 	tempLabel->setFocusPolicy(Qt::ClickFocus);
+	//tempLabel->setFixedSize(WINDOW_W / 3, WINDOW_H);
 
 	resultLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	resultLabel->setFrameShape(QFrame::Box);
 	resultLabel->setScaledContents(true);
-	resultLabel->setFixedWidth(WINDOW_W / 3);
+	//resultLabel->setFixedWidth(WINDOW_W / 3);
+	//resultLabel->setMaximumHeight(WINDOW_H / 2);
 	resultLabel->setText("resultImage");
 	resultLabel->setFocusPolicy(Qt::ClickFocus);
+	//resultLabel->setFixedSize(WINDOW_W / 3, WINDOW_H);
+
+	testArea->setBackgroundRole(QPalette::Light);
+	tempArea->setBackgroundRole(QPalette::Light);
+	resultArea->setBackgroundRole(QPalette::Light);
+
+	testArea->setWidget(testLabel);
+	tempArea->setWidget(tempLabel);
+	resultArea->setWidget(resultLabel);
 
 	_srcLabel->setFixedHeight(WINDOW_H / 50);
 	_tmpLabel->setFixedHeight(WINDOW_H / 50);
@@ -108,7 +133,7 @@ void FacBuilding::myLayout(){
 	slider1->setTickInterval(1);
 	slider1->setInvertedAppearance(true);
 	slider1->setValue(5);
-	slider1->setEnabled(false);
+	slider1->setEnabled(true);
 
 	slider2->setLayoutDirection(Qt::LayoutDirection::RightToLeft);
 	slider2->setMinimum(0);
@@ -116,7 +141,7 @@ void FacBuilding::myLayout(){
 	slider2->setTickInterval(1);
 	slider2->setInvertedAppearance(true);
 	slider2->setValue(10);
-	slider2->setEnabled(false);
+	slider2->setEnabled(true);
 
 	selectFolder->setText("select Folder");
 	button4->setText("start4");
@@ -129,24 +154,24 @@ void FacBuilding::myLayout(){
 	//command->setMinimumHeight(WINDOW_H / 5);
 
 	//gLayout->addWidget(toolBar, 0, 0, 1, 1);
-	gLayout->addWidget(testLabel, 0, 0, 5, 6);
-	gLayout->addWidget(tempLabel, 0, 6, 5, 6);
-	gLayout->addWidget(resultLabel, 0, 13, 5, 6);
+	gLayout->addWidget(testArea, 0, 0, 4, 6);
+	gLayout->addWidget(tempArea, 0, 7, 4, 6);
+	gLayout->addWidget(resultArea, 0, 14, 4, 6);
 
 	//labels
-	gLayout->addWidget(_srcLabel, 4, 2, 1, 1);
-	gLayout->addWidget(_tmpLabel, 4, 8, 1, 1);
-	gLayout->addWidget(_dstLabel, 4, 15, 1, 1);
+	//gLayout->addWidget(_srcLabel, 5, 2, 1, 1);
+	//gLayout->addWidget(_tmpLabel, 5, 8, 1, 1);
+	//gLayout->addWidget(_dstLabel, 5, 15, 1, 1);
 
-	gLayout->addWidget(startButton, 5, 0, 1, 1);
-	gLayout->addWidget(selectFolder, 5, 1, 1, 1);
-	gLayout->addWidget(symAttri, 5, 2, 1, 1);
-	gLayout->addWidget(slider1, 5, 3, 1, 2);
-	gLayout->addWidget(symvalue, 5, 5, 1, 1);
-	gLayout->addWidget(edgeAttri, 5, 6, 1, 1);
-	gLayout->addWidget(slider2, 5, 7, 1, 2);
-	gLayout->addWidget(gridvalue, 5, 9, 1, 1);
-
+	gLayout->addWidget(startButton, 6, 0, 1, 1);
+	gLayout->addWidget(selectFolder, 6, 1, 1, 1);
+	gLayout->addWidget(symAttri, 6, 2, 1, 1);
+	gLayout->addWidget(slider1, 6, 3, 1, 2);
+	gLayout->addWidget(symvalue, 6, 5, 1, 1);
+	gLayout->addWidget(edgeAttri, 6, 6, 1, 1);
+	gLayout->addWidget(slider2, 6, 7, 1, 2);
+	gLayout->addWidget(gridvalue, 6, 9, 1, 1);
+	gLayout->addWidget(_blankLabel, 6, 10, 1, 9);
 	//gLayout->addWidget(blank, 5, 5, 1, 15);
 	//gLayout->addWidget(button3, 4, 3, 1, 1);
 	//gLayout->addWidget(button4, 4, 5, 1, 1);
@@ -154,14 +179,15 @@ void FacBuilding::myLayout(){
 	//gLayout->addWidget(button6, 4, 7, 1, 1);
 	//gLayout->addWidget(button7, 4, 8, 1, 1);
 	
-	gLayout->addWidget(command, 6, 0, 3, 8);
+	//gLayout->addWidget(_blankLabel, 6, 0, 3, 8);
 	
+	gLayout->addWidget(command, 7, 0, 2, 20);
 	//gLayout->addWidget(cmdButton1, 7, 8, 1, 1);
 	//gLayout->addWidget(cmdButton2, 8, 8, 1, 1);
 
-	window->setLayout(gLayout);
-	window->setWindowModified(true);
-	window->show();
+	this->setLayout(gLayout);
+	this->setWindowModified(true);
+	this->show();
 }
 
 void FacBuilding::on_startButton_clicked(){
@@ -170,6 +196,8 @@ void FacBuilding::on_startButton_clicked(){
 	
 	if (fileName.length() != 0){
 		src = cv::imread(fileName.toStdString(),1);
+		tmp = src.clone();
+		dst = src.clone();
 		//const uchar *qImageBuffer = (const uchar*)src.data;
 		//imshow("src", src);
 		/*QMovie *mov = new QMovie(fileName);
@@ -177,17 +205,20 @@ void FacBuilding::on_startButton_clicked(){
 		testLabel->setMovie(mov);*/
 		
 		//auto resize label 
-		if (2 * WINDOW_H*src.cols >= WINDOW_W*src.rows) //max height 2/3 WINDOW_H
-			labelsize = Size(WINDOW_W / 3, src.rows * WINDOW_W / (3 * src.cols));
-		else
-			labelsize = Size(WINDOW_H * src.cols / (3 * src.rows), WINDOW_H / 3);
+		//if (2 * WINDOW_H*src.cols >= WINDOW_W*src.rows) //max height 2/3 WINDOW_H
+		//	labelsize = Size(WINDOW_W / 3, src.rows * WINDOW_W / (3 * src.cols));
+		//else
+		//	labelsize = Size(WINDOW_H * src.cols / (3 * src.rows), WINDOW_H / 3);
 
-		Mat tempS = Mat(labelsize, CV_8UC3);	
-		testLabel->setFixedSize(QSize(tempS.cols, tempS.rows));
-		tempLabel->setFixedSize(QSize(tempS.cols, tempS.rows));
-		resultLabel->setFixedSize(QSize(tempS.cols, tempS.rows));
-		cv::resize(src, tempS, labelsize);
-		QImage simage = Utility::MatToQImage(tempS);
+		//Mat tempS = Mat(labelsize, CV_8UC3);	
+		//testLabel->setFixedSize(QSize(tempS.cols, tempS.rows));
+		//tempLabel->setFixedSize(QSize(tempS.cols, tempS.rows));
+		//resultLabel->setFixedSize(QSize(tempS.cols, tempS.rows));
+		//cv::resize(src, tempS, labelsize);
+		//QImage simage = Utility::MatToQImage(tempS);
+		//testLabel->setPixmap(QPixmap::fromImage(simage));
+		testLabel->resize(src.cols, src.rows);
+		QImage simage = Utility::MatToQImage(src);
 		testLabel->setPixmap(QPixmap::fromImage(simage));
 
 		this->command->append("load image:" + fileName +"\n");
@@ -207,7 +238,7 @@ void FacBuilding::on_startButton_clicked(){
 }
 
 void FacBuilding::on_selectFolderButton_clicked(){
-	QString fileName = QFileDialog::getOpenFileName(NULL, tr("Open Image"), "data\\", tr("ImageFile(*.jpg *.bmp *.png)"));
+	QString fileName = QFileDialog::getOpenFileName(NULL, tr("Open Image"), "data\\training\\", tr("ImageFile(*.jpg *.bmp *.png)"));
 	string str = fileName.toStdString();
 
 	int s=0, e=0;
@@ -222,7 +253,8 @@ void FacBuilding::on_selectFolderButton_clicked(){
 	if (seg != NULL)
 		delete seg;
 	seg = new Segmentation();
-	seg->kmeans_seg_folder("data\\" + currentDir+"\\", "K-means\\");
+	seg->_segFolder = true;
+	
 	return;
 
 }
@@ -276,13 +308,18 @@ void FacBuilding::on_this_sendCmd(QString commd){
 	}
 	if (cmd == "kmeans"){
 		//if (src.rows != 0){
+			
+		if (seg->_segFolder)
+			seg->kmeans_seg_folder("data\\training\\", "K-means\\");
+		else{
 			Mat result, centers, visual;
 			connect(slider1, SIGNAL(mouseReleaseEvent(QMouseEvent*)), this, SLOT(on_sym_released(int)));
-			seg->kmeans_seg(src,result,centers,visual,5);
-			tmp = visual.clone();
+			seg->kmeans_seg(src, result, centers, visual, 5);
+			dst_temp = visual.clone();
 			seg->save_kmeans("K-means\\");
 			//seg->kmeans_seg_folder("data\\", "K-means\\");
 			this->command->append("K-means done..");
+		}	
 			repaint();
 		//}
 	
@@ -292,12 +329,23 @@ void FacBuilding::on_this_sendCmd(QString commd){
 		dst = seg->_dst.clone();
 		repaint();
 	}
+	if (cmd == "gco-all"){
+		
+		//training folders images
+		if (seg == NULL)
+			seg = new Segmentation();
+		seg->kmeans_seg_folder("data\\training\\", "K-means\\");
+		seg->gco_segAll("data\\training\\","output",(double)slider1->value() / 100, (double)slider2->value() / 10);
+		/*dst = seg->_dst.clone();
+		repaint();*/
+	}
 	if (cmd == "s"){
 		
 		repaint();
 		if (src.rows != 0){
 			//connect(testLabel, SIGNAL(mousepress(QPoint)), this, SLOT(on_ImageLabel_mouseClick(QPoint)));//connect user select}
-			connect(testLabel, SIGNAL(mousemove(QPoint, QPoint)), this, SLOT(on_ImageLabel_mouseDrag(QPoint, QPoint)));//connect user select
+			connect(testLabel, SIGNAL(mouserelease(vector<QPoint>&)), this, SLOT(on_ImageLabel_mouseRelease(vector<QPoint>&)));//connect user stroke
+			connect(testLabel, SIGNAL(mousemove(QPoint,QPoint)), this, SLOT(on_ImageLabel_mouseDrag(QPoint, QPoint)));//connect user stroke
 			this->command->append(tr("please drag some segments...."));
 		}
 		else{
@@ -309,7 +357,7 @@ void FacBuilding::on_this_sendCmd(QString commd){
 	if (cmd == "d"){
 
 		//disconnect(testLabel, SIGNAL(mousepress(QPoint)), 0,0);//connect user select}
-		disconnect(testLabel, SIGNAL(mousemove(QPoint, QPoint)), 0, 0);//connect user select
+		disconnect(testLabel, SIGNAL(mouserelease(vector<QPoint>&)), 0, 0);//connect user select
 		this->command->append(tr("segmenting... done!"));
 		showSegment(src, _axis);
 	}		
@@ -368,17 +416,104 @@ void FacBuilding::on_this_sendCmd(QString commd){
 		string infor = "rows:" + r +"   cols:" + c;
 		this->command->append(QString::fromStdString(infor));
 	}
+
+	if (cmd == "label"){
+		this->command->append(tr("User stroke for labeling each region.\n")+
+								 tr("1 => depth:30			\n")+
+								 tr("2 => depth:100			\n") +
+								 tr("3 => depth:170			\n") +
+								 tr("4 => depth:200			\n") +
+								 tr("5 => depth:230			\n") +
+								 tr("Causion!! your following stroke will not overlap previous label.") );
+
+		if (seg == NULL)
+			seg = new Segmentation();
+		else{
+			this->command->append(tr("segmentation already exist"));
+			return;
+		}
+		
+		seg->loadImages("data\\training\\");
+		connect(testLabel, SIGNAL(userstroke(QPoint, QPoint)), this, SLOT(on_user_selected(QPoint, QPoint)));
+		connect(testLabel, SIGNAL(mouserect(QPoint, QPoint)), this, SLOT(on_rect_changed(QPoint, QPoint)));
+	}
+
+	if (cmd == "test"){ //clear
+		string time = Utility::getTime();
+	}
 	return;
 }
 
 void FacBuilding::keyPressEvent(QKeyEvent* e){
-	/*switch (e->key()){
+	switch (e->key()){
 	case Qt::Key_Escape:
 		this->close();
 		break;
+	case Qt::Key_Space:
+		if (seg == NULL){
+			return;
+		}
+		if (seg->labelNext()){
+			src_temp = seg->_src;
+			src = seg->_src;
+			repaint();
+		}
+		break;
+
+	case Qt::Key_0:
+		seg->depth = DEPTH_0;
+		seg->userLabel(testLabel->user_tl, testLabel->user_br);
+		src_temp = seg->_src;
+		repaint();
+		break;
+
+	case Qt::Key_1:
+		seg->depth = DEPTH_1;
+		seg->userLabel(testLabel->user_tl, testLabel->user_br);
+		src_temp = seg->_src;
+		repaint();
+		break;
+
+	case Qt::Key_2:
+		seg->depth = DEPTH_2;
+		seg->userLabel(testLabel->user_tl, testLabel->user_br);
+		src_temp = seg->_src;
+		repaint();
+		break;
+
+	case Qt::Key_3:
+		seg->depth = DEPTH_3;
+		seg->userLabel(testLabel->user_tl, testLabel->user_br);
+		src_temp = seg->_src;
+		repaint();
+		break;
+
+	case Qt::Key_4:
+		seg->depth = DEPTH_4;
+		seg->userLabel(testLabel->user_tl, testLabel->user_br);
+		src_temp = seg->_src;
+		repaint();
+		break;
+	case Qt::Key_Enter:
+		seg->saveLabels("data\\training\\label\\");
+		src_temp = seg->_src;
+		repaint();
+		QtApi.sendMsg("save labels to data\\training\\label\\ \n");
+		break;
+	case Qt::Key::Key_Backspace:
+		if (seg == NULL){
+			return;
+		}
+		if (seg->labelPrevious()){
+			src_temp = seg->_src;
+			src = seg->_src;
+			repaint();
+		}
+		break;
+
 	default:
-		QMainWindow::keyPressEvent(e);
-	}*/
+		QWidget::keyPressEvent(e);
+	}
 	return;
 }
 
@@ -389,6 +524,8 @@ void FacBuilding::on_ImageLabel_mouseClick(QPoint pos){
 void FacBuilding::on_ImageLabel_mouseDrag(QPoint start, QPoint end){
 
 	double scale = (double)src.rows / (double)labelsize.height; //scale
+	scale = 1;
+
 	QPoint s = scale*start;
 	QPoint e = scale*end;
 
@@ -402,31 +539,45 @@ void FacBuilding::on_ImageLabel_mouseDrag(QPoint start, QPoint end){
 		_axis.push_back(std::pair<char, int>('y',ax));
 	}
 		
-	line(src_temp, Point(s.x(), s.y()), Point(e.x(), e.y()), Scalar(0, 0, 255), 4, CV_AA);
+	line(src_temp, Point(s.x(), s.y()), Point(e.x(), e.y()), Scalar(0, 255, 0), 2, CV_AA);
+	repaint();
+	//imshow("src_temp", src_temp); waitKey(0);
+}
+
+void FacBuilding::on_ImageLabel_mouseRelease(vector<QPoint>& points){
+
 	repaint();
 }
 
 void FacBuilding::repaint(){
-	if (src.rows > 0 && src.cols > 0){
-		Mat tempS = Mat(labelsize, CV_8UC3);
-		cv::resize(src, tempS, labelsize);
+	if (src_temp.rows > 0 && src_temp.cols > 0){
+		/*Mat tempS = Mat(labelsize, CV_8UC3);
+		cv::resize(src_temp, tempS, labelsize);
 		QImage simage = Utility::MatToQImage(tempS);
+		testLabel->setPixmap(QPixmap::fromImage(simage));*/
+		testLabel->resize(src_temp.cols, src_temp.rows);
+		QImage simage = Utility::MatToQImage(src_temp);
 		testLabel->setPixmap(QPixmap::fromImage(simage));
 	}
-	if (tmp.rows > 0 && tmp.cols > 0){
-		Mat tempT = Mat(labelsize, CV_8UC3);
-		cv::resize(tmp, tempT, labelsize);
+	if (dst_temp.rows > 0 && dst_temp.cols > 0){
+		/*Mat tempT = Mat(labelsize, CV_8UC3);
+		cv::resize(dst_temp, tempT, labelsize);
 		QImage dimage = Utility::MatToQImage(tempT);
-		tempLabel->setPixmap(QPixmap::fromImage(dimage));
+		tempLabel->setPixmap(QPixmap::fromImage(dimage));*/
+		tempLabel->resize(dst_temp.cols, dst_temp.rows);
+		QImage simage = Utility::MatToQImage(dst_temp);
+		tempLabel->setPixmap(QPixmap::fromImage(simage));
 	}
 	
 
 	if (dst.rows > 0 && dst.cols > 0){
-		
-		Mat tempD = Mat(labelsize, CV_8UC3);
+		/*Mat tempD = Mat(labelsize, CV_8UC3);
 		cv::resize(dst, tempD, labelsize);
 		QImage dimage = Utility::MatToQImage(tempD);
-		resultLabel->setPixmap(QPixmap::fromImage(dimage));
+		resultLabel->setPixmap(QPixmap::fromImage(dimage));*/
+		resultLabel->resize(dst.cols, dst.rows);
+		QImage simage = Utility::MatToQImage(dst);
+		resultLabel->setPixmap(QPixmap::fromImage(simage));
 	}
 		
 	return;
@@ -471,4 +622,58 @@ void FacBuilding::on_grid_valuechanged(int v){
 	double pos = (double)slider2->value() / 100;
 	QString str = QString("%1").arg(pos);
 	gridvalue->setText(str);
+}
+
+void FacBuilding::on_rect_changed(QPoint tl, QPoint br){
+	src_temp = src.clone();
+
+	if (br.x() >= src.cols)
+		br = QPoint(src.cols - 1, br.y());
+	if (br.y() >= src.rows)
+		br = QPoint(br.x(), src.rows - 1);
+
+	testLabel->user_br = br;
+
+	line(src_temp, Point(tl.x(), tl.y()), Point(br.x(), tl.y()), Scalar(0, 0, 255), 1, CV_AA);
+	line(src_temp, Point(tl.x(), tl.y()), Point(tl.x(), br.y()), Scalar(0, 0, 255), 1, CV_AA);
+	line(src_temp, Point(br.x(), br.y()), Point(br.x(), tl.y()), Scalar(0, 0, 255), 1, CV_AA);
+	line(src_temp, Point(br.x(), br.y()), Point(tl.x(), br.y()), Scalar(0, 0, 255), 1, CV_AA);
+	repaint();
+}
+
+void FacBuilding::on_user_selected(QPoint tl, QPoint br){
+
+	QtApi.sendMsg("Please choose label...\n");
+
+	if (br.x() >= src.cols)
+		br = QPoint(src.cols - 1, br.y());
+	if (br.y() >= src.rows)
+		br = QPoint(br.x(), src.rows - 1);
+
+	testLabel->user_br = br;
+
+	/*for (int i = tl.x(); i < br.x();i++)
+		for (int j = tl.y(); j < br.y(); j++){
+			src_temp.at<Vec3b>(j, i) = Vec3b(0,0,0);
+		}*/
+	
+	QtApi.sendMsg("0 => depth:30			\n" \
+				"1 => depth:100			\n" \
+				"2 => depth:200			\n" \
+				"3 => depth:230			\n" \
+				"4 => depth:170			\n" \
+				"enter for next. \n" \
+				"Causion!! your following stroke will not overlap previous label.\n");
+
+	QtApi.sendMsg("select label (0,1,2,3,4)\n");
+
+	src_temp = seg->_src;
+	repaint();
+}
+
+void FacBuilding::showMsg(string msg){
+	this->command->insertPlainText(QString::fromStdString(msg));
+	this->command->moveCursor(QTextCursor::End);
+	QApplication::processEvents();
+	log << getTime()+": "+msg;
 }

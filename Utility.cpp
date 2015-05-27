@@ -1,6 +1,5 @@
 #include "Utility.h"
 
-
 QImage Utility::MatToQImage(const Mat& mat)
 {
 	// 8-bits unsigned, NO. OF CHANNELS=1
@@ -60,4 +59,55 @@ void Utility::testCommand(QString& command){
 	string str;
 	str = command.toStdString();
 	qDebug("sss");
+}
+
+string Utility::toString(float d){
+	char buffer[20];
+	sprintf_s(buffer, "%f", d);
+	string s = buffer;
+	format(s);
+	return s;
+}
+
+string Utility::toString(long d){
+	char buffer[20];
+	sprintf_s(buffer, "%d", d);
+	string s = buffer;
+	format(s);
+	return s;
+	
+}
+
+string Utility::toString(double d){
+	char buffer[20];
+	sprintf_s(buffer, "%f", d);
+	string s = buffer;
+	format(s);
+	return s;
+}
+
+string Utility::toString(int d){
+	char buffer[20];
+	sprintf_s(buffer, "%d", d);
+	string s = buffer;
+	format(s);
+	return s;
+}
+
+void Utility::format(string& s){
+	if (s[1]=='.')
+		s = s.substr(0, 4);
+	return;
+}
+
+clock_t Utility::elapsed_time(){
+	return clock() / CLOCKS_PER_SEC;
+}
+
+string Utility::getTime(){
+	time_t t = time(0);
+	char tmp[64];
+	strftime(tmp, sizeof(tmp), "[%Y_%m_%d][%H_%M_%S]", localtime(&t));
+	//puts(tmp);
+	return tmp;
 }

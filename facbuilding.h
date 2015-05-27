@@ -1,7 +1,7 @@
 #ifndef FACBUILDING_H
 #define FACBUILDING_H
 
-#define WINDOW_W 1000
+#define WINDOW_W 1500
 #define WINDOW_H 800
 
 #include <QtWidgets/QMainWindow>
@@ -9,10 +9,12 @@
 #include <QWidget>
 #include <QGridLayout>
 #include <QPushButton>
+#include <qscrollarea.h>
 #include <qtextedit.h>
 #include <qslider.h>
 #include <qaction.h>
 #include <qdebug.h>
+#include <qapplication.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -23,6 +25,9 @@
 #include "Utility.h"
 #include "Segmentation.h"
 
+#include <iostream>
+#include <fstream>
+
 //previous graph method
 #include "../3rdParty/graph/FacBuilder.h"
 #include "../3rdParty/graph/Basic_File.h"
@@ -30,10 +35,13 @@
 #include "../3rdParty/graph/GraphMatching.h"
 #include "../3rdParty/graph/DP.h"
 
+//extern QtAPI QtApi;
+#include <string>
+#include <vector>
 using namespace cv;
 using namespace std;
 
-class FacBuilding : public QMainWindow
+class FacBuilding : public QWidget
 {
 	Q_OBJECT
 
@@ -45,10 +53,13 @@ public:
 	~FacBuilding();
 
 	void myLayout(); //setup my own layout
-	void keyPressEvent(QKeyEvent* e);
+
 	//UI design
-	QWidget* window;
+	//QWidget* window;
 	QGridLayout* gLayout; //10*20 layout in this UI
+
+	QScrollArea *testArea, *tempArea, *resultArea;
+
 	ImageLabel* testLabel;
 	ImageLabel* tempLabel; 
 	ImageLabel* resultLabel;
@@ -76,6 +87,8 @@ public:
 	Mat dst,dst_temp;
 	Mat tmp;
 
+	ofstream log;
+
 	Segmentation* seg = NULL;
 
 private:
@@ -86,8 +99,9 @@ private:
 
 	QLabel *_srcLabel = new QLabel("src"), 
 		   *_tmpLabel = new QLabel("kmeans"), 
-		   *_dstLabel = new QLabel("gco segmentation");
-
+		   *_dstLabel = new QLabel("gco segmentation"),
+		   *_blankLabel = new QLabel();
+	
 	void repaint();
 	void showSegment(Mat& src, vector<pair<char, int>>& axis);
 
@@ -103,11 +117,19 @@ private slots:
 	void on_this_sendCmd(QString cmd);
 
 	void on_ImageLabel_mouseClick(QPoint pos);
-	void on_ImageLabel_mouseDrag(QPoint start, QPoint end);
+	void on_ImageLabel_mouseDrag(QPoint s, QPoint e);
+	void on_ImageLabel_mouseRelease(vector<QPoint>& points);
 
 	void on_sym_valuechanged(int v);
 	void on_grid_valuechanged(int v);
 	void on_sym_released();
+
+	void on_user_selected(QPoint tl, QPoint br);
+	void on_rect_changed(QPoint tl, QPoint br);
+	void showMsg(string msg);
+
+protected:
+	void keyPressEvent(QKeyEvent* e);
 };
 
 #endif // FACBUILDING_H
