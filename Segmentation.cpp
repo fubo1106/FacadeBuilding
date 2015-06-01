@@ -1,11 +1,22 @@
 #include "Segmentation.h"
 #include "Basics.h"
 
+#include <queue>
 #include <assert.h>
 
 extern QtAPI QtApi;
 
+const Scalar Segmentation::colorTab[5] =     //最多只有10类，所以最多也就给10个颜色
+{
+	Scalar(DEPTH_0, DEPTH_0, DEPTH_0), //blue #696969 105, 105, 105
+	Scalar(DEPTH_1, DEPTH_1, DEPTH_1), //blue #696969 105, 105, 105
+	Scalar(DEPTH_2, DEPTH_2, DEPTH_2), //blue #696969 105, 105, 105
+	Scalar(DEPTH_3, DEPTH_3, DEPTH_3), //blue #696969 105, 105, 105
+	Scalar(DEPTH_4, DEPTH_4, DEPTH_4), //blue #696969 105, 105, 105
+};
+
 Segmentation::Segmentation(){
+
 }
 
 Segmentation::Segmentation(cv::Mat& src, cv::Mat& dst)
@@ -24,15 +35,37 @@ Segmentation::Segmentation(cv::Mat& src,string path)
 	if (l == path.npos)
 		l = path.find_last_of('\\');
 	_baseName = path.substr(l + 1, r - l - 1);
+	_label_marked = new int*[_src.rows];
+	for (int i = 0; i < src.rows; i++)
+		_label_marked[i] = new int[src.cols];
+	for (int i = 0; i < src.rows; i++)
+		for (int j = 0; j < src.cols; j++)
+			_label_marked[i][j] = 0;
+
 	calcAttribute();
 }
+void Segmentation::reinitialize(){
+	/*if (_label_marked != NULL) 
+		delete _label_marked;*/
+	if (_src.rows > 0 && _src.cols > 0){
+		_label_marked = new int*[_src.rows];
+		for (int i = 0; i < _src.rows; i++)
+			_label_marked[i] = new int[_src.cols];
 
+		for (int i = 0; i < _src.rows; i++)
+			for (int j = 0; j < _src.cols; j++)
+				_label_marked[i][j] = 0;
+	}
+
+}
 Segmentation::~Segmentation()
 {
 	if (_rgradient != NULL)
 		delete _rgradient;
 	if (_cgradient != NULL)
 		delete _cgradient;
+	if (_label_marked != NULL)
+	delete _label_marked;
 }
 
 void Segmentation::calcAttribute(){
@@ -285,14 +318,14 @@ void Segmentation::kmeans_seg(Mat& src, Mat& result, Mat& centers, Mat& visual, 
 	visual = Mat(src.rows, src.cols, CV_8UC3);
 	RNG rng(12345); //随机数产生器
 
-	Scalar colorTab[] =     //最多只有10类，所以最多也就给10个颜色
-	{
-		Scalar(DEPTH_0, DEPTH_0, DEPTH_0), //blue #696969 105, 105, 105
-		Scalar(DEPTH_1, DEPTH_1, DEPTH_1), //blue #696969 105, 105, 105
-		Scalar(DEPTH_2, DEPTH_2, DEPTH_2), //blue #696969 105, 105, 105
-		Scalar(DEPTH_3, DEPTH_3, DEPTH_3), //blue #696969 105, 105, 105
-		Scalar(DEPTH_4, DEPTH_4, DEPTH_4), //blue #696969 105, 105, 105
-	};
+	//Scalar colorTab[] =     //最多只有10类，所以最多也就给10个颜色
+	//{
+	//	Scalar(DEPTH_0, DEPTH_0, DEPTH_0), //blue #696969 105, 105, 105
+	//	Scalar(DEPTH_1, DEPTH_1, DEPTH_1), //blue #696969 105, 105, 105
+	//	Scalar(DEPTH_2, DEPTH_2, DEPTH_2), //blue #696969 105, 105, 105
+	//	Scalar(DEPTH_3, DEPTH_3, DEPTH_3), //blue #696969 105, 105, 105
+	//	Scalar(DEPTH_4, DEPTH_4, DEPTH_4), //blue #696969 105, 105, 105
+	//};
 
 	int k, clusterCount = nclusters;
 	int i, sampleCount = src.rows*src.cols;//样本数大小
@@ -411,149 +444,247 @@ void Segmentation::save_kmeans(string dir){
 }
 
 void Segmentation::gco_seg(double smooth_sym, double smooth_grid) {
+	if (_withHint) 
+		gco_seg_interactive(smooth_sym, smooth_grid, &userhint);
+	else{
+		gco_seg_auto(smooth_sym, smooth_grid);
+	}
+	save_gco("data\\result\\");
+	//imshow("gco", _dst); waitKey(0);
+	delete gcoSeg;
+	
+}
+
+void Segmentation::gco_seg_interactive(double smooth_sym, double smooth_grid, UserHint* userhint){
+	userhint->size();
+
+	gco_seg_auto(smooth_sym, smooth_grid);
+	refine_with_user();
+
+	_withHint = false;
+}
+
+void Segmentation::gco_seg_auto(double smooth_sym, double smooth_grid){
 	double step_s = 0.05;
 	double step_g = 2;
-	/*for (double sym = 0; sym <= smooth_sym; sym += step_s)
-		for (double grid = 1; grid <= smooth_grid; grid += step_g){*/
-	for (double sym = 0; ; )
-		for (double grid = 1; ; ){
-			string label_file = "K-means\\" + _baseName + "\\labels.txt";
-			string weight_file = "K-means\\" + _baseName + "\\label_weight.txt";
-			//string gpb_file = "K-means\\" + _baseName + "\\gPb.txt";
-			string gpb_file = "data\\training\\gPb-" + _baseName + ".txt";
-			string color_file = "K-means\\" + _baseName + "\\scolor.txt";
-			string center_file = "K-means\\" + _baseName + "\\centers.txt";
-			
-			//rsult
-			string resultfile = "data\\result\\" + _baseName + "_result_label_s" + toString(sym) + "_g" + toString(grid) + ".txt";
-			string simg = "data\\result\\" + _baseName + "_src_image.jpg";
-			string slabel = "data\\result\\" + _baseName + "_src_label.jpg";
-			string glabel = "data\\result\\" + _baseName + "_gco_label_s" + toString(sym) + "_g" + toString(grid) + ".jpg";
 
-			//if (boost::filesystem::exists(resultfile) &&
-			//	boost::filesystem::exists(simg) &&
-			//	boost::filesystem::exists(slabel) &&
-			//	//	boost::filesystem::exists(dir + _baseName + "\\gPb.mat") &&
-			//	boost::filesystem::exists(glabel))
-			//	continue;//already exist 
-			
-			cout << "\n============================GCO segmentation===========================\n" << endl <<
-				"start gco segmentation for " << _imagePath << endl;
-			QtApi.sendMsg("\n=============================GCO segmentation===========================\n" \
-				"start gco segmentation for " + _imagePath + "\n");
-			QtApi.sendMsg("image information: rows: " + toString(_src.rows) + " cols: " + toString(_src.cols) + "\n");
-			QtApi.sendMsg("smooth_sym: " + toString(sym) + " smooth_grid: " + toString(grid) + "\n");
-			//if (!init_gco){
-			gcoSeg = new gcoUtil(_src.rows, _src.cols);
+	double sym = smooth_sym;
+	double grid = smooth_grid;
+	//for (double sym = 0; sym <= smooth_sym; sym += step_s)
+	//	for (double grid = 1; grid <= smooth_grid; grid += step_g){
 
-			gcoSeg->smooth_sym = sym;
-			gcoSeg->smooth_grid = grid;
+		/*for (double sym = 0; ; )
+		for (double grid = 1; ; ){*/
+		string label_file = "K-means\\" + _baseName + "\\labels.txt";
+		string weight_file = "K-means\\" + _baseName + "\\label_weight.txt";
+		//string gpb_file = "K-means\\" + _baseName + "\\gPb.txt";
+		string gpb_file = "data\\training\\gPb-" + _baseName + ".txt";
+		string color_file = "K-means\\" + _baseName + "\\scolor.txt";
+		string center_file = "K-means\\" + _baseName + "\\centers.txt";
 
-			cout << "initial data..." << endl;
-			QtApi.sendMsg("initial data...    ");
-			clock_t sinit = clock();
-			gcoSeg->initial_data(label_file, weight_file, gpb_file, color_file, center_file, (_src.cols - 1) / 2);
-			clock_t einit = clock();
-			QtApi.sendMsg("[" + toString((double(einit - sinit) / CLOCKS_PER_SEC)) + " sec]\n");
+		//rsult
+		string resultfile = "data\\result\\" + _baseName + "_result_label_s" + toString(sym) + "_g" + toString(grid) + ".txt";
+		string simg = "data\\result\\" + _baseName + "_src_image.jpg";
+		string slabel = "data\\result\\" + _baseName + "_src_label.jpg";
+		string glabel = "data\\result\\" + _baseName + "_gco_label_s" + toString(sym) + "_g" + toString(grid) + ".jpg";
 
-			cout << "set neighbors..." << endl;
-			QtApi.sendMsg("set neighbors...   ");
-			clock_t snb = clock();
-			gcoSeg->set_neighbors();
-			clock_t enb = clock();
-			QtApi.sendMsg("[" + toString((double(enb - snb) / CLOCKS_PER_SEC)) + " sec]\n");
+		//if (boost::filesystem::exists(resultfile) &&
+		//	boost::filesystem::exists(simg) &&
+		//	boost::filesystem::exists(slabel) &&
+		//	//	boost::filesystem::exists(dir + _baseName + "\\gPb.mat") &&
+		//	boost::filesystem::exists(glabel))
+		//	continue;//already exist 
 
-			cout << "build graph... " << endl;
-			QtApi.sendMsg("build graph...     ");
-			clock_t sbuild = clock();
-			gcoSeg->build_general_graph();
-			clock_t ebuild = clock();
-			QtApi.sendMsg("[" + toString((double(ebuild - sbuild) / CLOCKS_PER_SEC)) + " sec]\n");
+		cout << "\n============================GCO segmentation===========================\n" << endl <<
+			"start gco segmentation for " << _imagePath << endl;
+		QtApi.sendMsg("\n=============================GCO segmentation===========================\n" \
+			"start gco segmentation for " + _imagePath + "\n");
+		QtApi.sendMsg("image information: rows: " + toString(_src.rows) + " cols: " + toString(_src.cols) + "\n");
+		QtApi.sendMsg("smooth_sym: " + toString(sym) + " smooth_grid: " + toString(grid) + "\n");
+		//if (!init_gco){
+		gcoSeg = new gcoUtil(_src.rows, _src.cols);
 
-			init_gco = true;
-			//}
-			/*else{
-			gcoSeg->smooth_sym = v;
-			gcoSeg->set_sym_neighbors();
-			}*/
-			cout << "gc solving..." << endl;
-			QtApi.sendMsg("gc solving...      ");
-			//QtApi.sendMsg("    symmetry smoothness = "+toString(smooth_sym));
-			//QtApi.sendMsg("    grid smoothness = " + toString(smooth_grid));
+		gcoSeg->smooth_sym = sym;
+		gcoSeg->smooth_grid = grid;
 
-			clock_t s1 = clock();
-			gcoSeg->solve_general_graph();
-			clock_t s2 = clock();
-			QtApi.sendMsg("[" + toString((double(s2 - s1) / CLOCKS_PER_SEC)) + " sec]\n");
-			//gco->read_labels("K-means\\" + _baseName + "\\labels.txt");
-			//gco->read_label_center("K-means\\" + _baseName + "\\centers.txt");
+		cout << "initial data..." << endl;
+		QtApi.sendMsg("initial data...    ");
+		clock_t sinit = clock();
+		gcoSeg->initial_data(label_file, weight_file, gpb_file, color_file, center_file, (_src.cols - 1) / 2);
+		clock_t einit = clock();
+		QtApi.sendMsg("[" + toString((double(einit - sinit) / CLOCKS_PER_SEC)) + " sec]\n");
 
-			//visualization
+		cout << "set neighbors..." << endl;
+		QtApi.sendMsg("set neighbors...   ");
+		clock_t snb = clock();
+		gcoSeg->set_neighbors();
+		clock_t enb = clock();
+		QtApi.sendMsg("[" + toString((double(enb - snb) / CLOCKS_PER_SEC)) + " sec]\n");
 
-			Scalar colorTab[] =     //最多只有10类，所以最多也就给10个颜色
-			{
-				Scalar(DEPTH_0, DEPTH_0, DEPTH_0), //blue #696969 105, 105, 105
-				Scalar(DEPTH_1, DEPTH_1, DEPTH_1), //blue #696969 105, 105, 105
-				Scalar(DEPTH_2, DEPTH_2, DEPTH_2), //blue #696969 105, 105, 105
-				Scalar(DEPTH_3, DEPTH_3, DEPTH_3), //blue #696969 105, 105, 105
-				Scalar(DEPTH_4, DEPTH_4, DEPTH_4), //blue #696969 105, 105, 105
-			};
+		cout << "build graph... " << endl;
+		QtApi.sendMsg("build graph...     ");
+		clock_t sbuild = clock();
+		gcoSeg->build_general_graph();
+		clock_t ebuild = clock();
+		QtApi.sendMsg("[" + toString((double(ebuild - sbuild) / CLOCKS_PER_SEC)) + " sec]\n");
 
-			//namedWindow("before optimization", 0);
-			//namedWindow("after optimization", 0);
-			
-			ofstream ofs(resultfile);
+		init_gco = true;
+		//}
+		/*else{
+		gcoSeg->smooth_sym = v;
+		gcoSeg->set_sym_neighbors();
+		}*/
+		cout << "gc solving..." << endl;
+		QtApi.sendMsg("gc solving...      ");
+		//QtApi.sendMsg("    symmetry smoothness = "+toString(smooth_sym));
+		//QtApi.sendMsg("    grid smoothness = " + toString(smooth_grid));
 
-			Mat be = _src.clone();
-			Mat af = _src.clone();
+		clock_t s1 = clock();
+		gcoSeg->solve_general_graph();
+		clock_t s2 = clock();
+		QtApi.sendMsg("[" + toString((double(s2 - s1) / CLOCKS_PER_SEC)) + " sec]\n");
+		//gco->read_labels("K-means\\" + _baseName + "\\labels.txt");
+		//gco->read_label_center("K-means\\" + _baseName + "\\centers.txt");
 
-			for (int i = 0; i < _src.rows; i++){
-				for (int j = 0; j < _src.cols; j++){
-					int label_b = (int)gcoSeg->init_labels(i, j);
-					int label_a = (int)gcoSeg->result_labels(i, j);
+		//visualization
 
-					ofs << label_a << " ";
+		//Scalar colorTab[] =     //最多只有10类，所以最多也就给10个颜色
+		//{
+		//	Scalar(DEPTH_0, DEPTH_0, DEPTH_0), //blue #696969 105, 105, 105
+		//	Scalar(DEPTH_1, DEPTH_1, DEPTH_1), //blue #696969 105, 105, 105
+		//	Scalar(DEPTH_2, DEPTH_2, DEPTH_2), //blue #696969 105, 105, 105
+		//	Scalar(DEPTH_3, DEPTH_3, DEPTH_3), //blue #696969 105, 105, 105
+		//	Scalar(DEPTH_4, DEPTH_4, DEPTH_4), //blue #696969 105, 105, 105
+		//};
 
-					int s0 = (int)colorTab[label_b][0];
-					int s1 = (int)colorTab[label_b][1];
-					int s2 = (int)colorTab[label_b][2];
+		//namedWindow("before optimization", 0);
+		//namedWindow("after optimization", 0);
 
-					int s00 = (int)colorTab[label_a][0];
-					int s11 = (int)colorTab[label_a][1];
-					int s22 = (int)colorTab[label_a][2];
+		ofstream ofs(resultfile);
 
-					Vec3b v1 = Vec3b(s0, s1, s2);
-					Vec3b v2 = Vec3b(s00, s11, s22);
+		Mat be = _src.clone();
+		Mat af = _src.clone();
 
-					be.at<Vec3b>(i, j) = v1;
-					af.at<Vec3b>(i, j) = v2;
+		for (int i = 0; i < _src.rows; i++){
+			for (int j = 0; j < _src.cols; j++){
+				int label_b = (int)gcoSeg->init_labels(i, j);
+				int label_a = (int)gcoSeg->result_labels(i, j);
 
-				}
-				ofs << endl;
+				ofs << label_a << " ";
+
+				int s0 = (int)colorTab[label_b][0];
+				int s1 = (int)colorTab[label_b][1];
+				int s2 = (int)colorTab[label_b][2];
+
+				int s00 = (int)colorTab[label_a][0];
+				int s11 = (int)colorTab[label_a][1];
+				int s22 = (int)colorTab[label_a][2];
+
+				Vec3b v1 = Vec3b(s0, s1, s2);
+				Vec3b v2 = Vec3b(s00, s11, s22);
+
+				be.at<Vec3b>(i, j) = v1;
+				af.at<Vec3b>(i, j) = v2;
+
 			}
-
-			_dst = af.clone();
-
-			cout << "writing to" << simg << endl
-				<< "writing to" << slabel << endl
-				<< "writing to" << glabel << endl;
-			QtApi.sendMsg("writing to " + simg + "\n" \
-				"writing to " + slabel + "\n" \
-				"writing to " + glabel + "\n");
-
-			imwrite(simg, _src);
-			imwrite(slabel, be);
-			imwrite(glabel, af);
-			//imshow("before optimization", be);
-			//imshow("after optimization", af);
-			//waitKey();
-			delete gcoSeg;
-
-			cout << "gco segmentation for " << _imagePath << " done" << endl <<
-				"=======================END GCO segmentation============================\n" << endl << endl << endl;
-			QtApi.sendMsg("gco segmentation for " + _imagePath + " done\n" \
-				"=======================END GCO segmentation==============================\n");
+			ofs << endl;
 		}
+
+		_dst = af.clone();
+
+		cout << "writing to" << simg << endl
+			<< "writing to" << slabel << endl
+			<< "writing to" << glabel << endl;
+		QtApi.sendMsg("writing to " + simg + "\n" \
+			"writing to " + slabel + "\n" \
+			"writing to " + glabel + "\n");
+
+		imwrite(simg, _src);
+		imwrite(slabel, be);
+		imwrite(glabel, af);
+		//imshow("before optimization", be);
+		//imshow("after optimization", af);
+		//waitKey();
+		
+		//delete gcoSeg;
+
+		cout << "gco segmentation for " << _imagePath << " done" << endl <<
+			"=======================END GCO segmentation============================\n" << endl << endl << endl;
+		QtApi.sendMsg("gco segmentation for " + _imagePath + " done\n" \
+			"=======================END GCO segmentation==============================\n");
+	//}
+}
+
+void Segmentation::refine_with_user(){
+	//MatrixXi initlabel = gcoSeg->result_labels;
+	for (int i = 0; i < userhint.size(); i++){
+		refine_with_onehint(gcoSeg->result_labels, userhint[i]);
+	}
+	save_gco();
+	gcoSeg->init_labels = gcoSeg->result_labels;
+	gcoSeg->build_general_graph();
+	gcoSeg->solve_general_graph();
+	save_gco();
+}
+
+/*refine init label with one user hint:
+	input OneHint(vector<Point> type), indicate regions these point in, belong to one label
+	from start point('s label)
+*/
+void Segmentation::refine_with_onehint(MatrixXi& init, OneHint& hint){
+	int cadiLabel = init(hint[0].y, hint[0].x);
+	queue<Point> q;
+	int preLabel = cadiLabel;
+	int curLabel;
+
+	int **marked;
+	marked = new int*[init.rows()];
+	for (int i = 0; i < init.rows(); i++)
+		marked[i] = new int[init.cols()];
+	for (int i = 0; i<init.rows(); i++)
+		for (int j = 0; j<init.cols(); j++)
+			marked[i][j] = 0;
+
+	for (int i = 1; i < hint.size(); i++){
+		curLabel = init(hint[i].y, hint[i].x);
+		if (preLabel != curLabel){
+			q.push(hint[i]);
+			preLabel = curLabel;
+		}
+
+		while (!q.empty()){
+			Point p = q.front();
+			q.pop();
+			
+			if (!marked[p.y][p.x]){
+				if (p.x + 1 < init.cols() && init(p.y, p.x) == init(p.y, p.x + 1)){
+					//init(p.y, p.x + 1) = cadiLabel;
+					q.push(Point(p.x + 1, p.y));
+				}
+
+				if (p.y + 1 < init.rows() && init(p.y, p.x) == init(p.y + 1, p.x)){
+					//init(p.y + 1, p.x) = cadiLabel;
+					q.push(Point(p.x, p.y + 1));
+				}
+
+				if (p.x - 1 >= 0 && init(p.y, p.x) == init(p.y, p.x - 1)){
+					//init(p.y, p.x - 1) = cadiLabel;
+					q.push(Point(p.x - 1, p.y));
+				}
+
+				if (p.y - 1 >= 0 && init(p.y, p.x) == init(p.y - 1, p.x)){
+					//init(p.y - 1, p.x) = cadiLabel;
+					q.push(Point(p.x, p.y - 1));
+				}
+				init(p.y, p.x) = cadiLabel;
+				marked[p.y][p.x] = 1;
+			}
+		
+
+		}
+	}
+	
+		
 }
 
 void Segmentation::gco_segAll(string inputDir, string outDir, double smooth_sym, double smooth_grid){
@@ -618,10 +749,12 @@ void Segmentation::loadImages(string inputDir){
 }
 
 bool Segmentation::labelNext(){
+	
 	cursor++;
 	if (cursor < imagePath.size()){
 		_src = imread(imagePath[cursor]);
 		_baseName = baseNames[cursor];
+		reinitialize();
 		return true;
 	}
 		
@@ -639,32 +772,37 @@ bool Segmentation::labelPrevious(){
 	if (cursor < imagePath.size()){
 		_src = imread(imagePath[cursor]);
 		_baseName = baseNames[cursor];
+		reinitialize();
 		return true;
 	}
-
+	return false;
 }
 
 void Segmentation::userLabel(QPoint tl, QPoint br){
 	for (int i = tl.y(); i < br.y(); i++)
 		for (int j = tl.x(); j < br.x(); j++){
-		if (_src.at<Vec3b>(i, j) != Vec3b(DEPTH_0, DEPTH_0, DEPTH_0) && _src.at<Vec3b>(i, j) != Vec3b(DEPTH_1, DEPTH_1, DEPTH_1) &&
-			_src.at<Vec3b>(i, j) != Vec3b(DEPTH_2, DEPTH_2, DEPTH_2) && _src.at<Vec3b>(i, j) != Vec3b(DEPTH_3, DEPTH_3, DEPTH_3) &&
-			_src.at<Vec3b>(i, j) != Vec3b(DEPTH_4, DEPTH_4, DEPTH_4))
+		if (!_label_marked[i][j]){
 			_src.at<Vec3b>(i, j) = Vec3b(depth, depth, depth);
+			_label_marked[i][j] = 1;
+		}
+			
 		}
 	//imshow("user", _src); waitKey(0);
 }
 
 void Segmentation::saveLabels(string labelDir){
-	ofstream ofs(labelDir + _baseName + "_label.txt");
+	ofstream ofs(labelDir + _baseName + ".label");
 	for (int i = 0; i < _src.rows; i++)
 		for (int j = 0; j < _src.cols; j++){
-		if (_src.at<Vec3b>(i, j) != Vec3b(DEPTH_0, DEPTH_0, DEPTH_0) && _src.at<Vec3b>(i, j) != Vec3b(DEPTH_1, DEPTH_1, DEPTH_1) &&
+		/*if (_src.at<Vec3b>(i, j) != Vec3b(DEPTH_0, DEPTH_0, DEPTH_0) && _src.at<Vec3b>(i, j) != Vec3b(DEPTH_1, DEPTH_1, DEPTH_1) &&
 			_src.at<Vec3b>(i, j) != Vec3b(DEPTH_2, DEPTH_2, DEPTH_2) && _src.at<Vec3b>(i, j) != Vec3b(DEPTH_3, DEPTH_3, DEPTH_3) &&
-			_src.at<Vec3b>(i, j) != Vec3b(DEPTH_4, DEPTH_4, DEPTH_4))
+			_src.at<Vec3b>(i, j) != Vec3b(DEPTH_4, DEPTH_4, DEPTH_4))*/
+		if (!_label_marked[i][j]){
 			_src.at<Vec3b>(i, j) = Vec3b(DEPTH_4, DEPTH_4, DEPTH_4);
+			_label_marked[i][j] = 1;
 		}
-	if (!boost::filesystem::exists(labelDir + _baseName + "_label.jpg") && !boost::filesystem::exists(labelDir + _baseName + "_label.txt")){
+		}
+	if (!boost::filesystem::exists(labelDir + _baseName + "_label.jpg") || !boost::filesystem::exists(labelDir + _baseName + ".label")){
 		for (int i = 0; i < _src.rows; i++){
 			for (int j = 0; j < _src.cols; j++){
 				if (_src.at<Vec3b>(i, j) == Vec3b(DEPTH_0, DEPTH_0, DEPTH_0))
@@ -686,6 +824,38 @@ void Segmentation::saveLabels(string labelDir){
 		
 	
 	else{
-		QtApi.sendMsg(labelDir + _baseName + "_label.jpg already exist...");
+		QtApi.sendMsg(labelDir + _baseName + ".jpg already labeled...\n");
 	}
+}
+
+void Segmentation::save_gco(string dir){
+	string result = dir + _baseName + "_gco.jpg";
+	string init = dir + _baseName + "_init.jpg";
+
+	Mat be = _src.clone();
+	Mat af = _src.clone();
+
+	for (int i = 0; i < _src.rows; i++){
+		for (int j = 0; j < _src.cols; j++){
+			int label_b = (int)gcoSeg->init_labels(i, j);
+			int label_a = (int)gcoSeg->result_labels(i, j);
+
+			int s0 = (int)colorTab[label_b][0];
+			int s1 = (int)colorTab[label_b][1];
+			int s2 = (int)colorTab[label_b][2];
+
+			int s00 = (int)colorTab[label_a][0];
+			int s11 = (int)colorTab[label_a][1];
+			int s22 = (int)colorTab[label_a][2];
+
+			Vec3b v1 = Vec3b(s0, s1, s2);
+			Vec3b v2 = Vec3b(s00, s11, s22);
+
+			be.at<Vec3b>(i, j) = v1;
+			af.at<Vec3b>(i, j) = v2;
+
+		}
+	}
+	imwrite(init, be);
+	imwrite(result, af);
 }

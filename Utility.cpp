@@ -111,3 +111,13 @@ string Utility::getTime(){
 	//puts(tmp);
 	return tmp;
 }
+
+cv::Point Utility::tocvPoint(QPoint p){
+	return cv::Point(p.x(), p.y());
+}
+vector<cv::Point> Utility::tocvPoints(vector<QPoint>& p){
+	vector<cv::Point> points;
+	for (int i = 0; i < p.size(); i++)
+		points.push_back(tocvPoint(p[i]));
+	return points;
+}

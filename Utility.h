@@ -46,7 +46,10 @@ namespace Utility
 	clock_t elapsed_time();
 
 	string getTime();
-
+	
 	void print();
+
+	cv::Point tocvPoint(QPoint p);
+	vector<cv::Point> tocvPoints(vector<QPoint>& p);
 };
 

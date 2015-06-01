@@ -326,7 +326,7 @@ void FacBuilding::on_this_sendCmd(QString commd){
 	}
 	if (cmd == "gco"){
 		seg->gco_seg((double)slider1->value() / 100, (double)slider2->value() / 10);
-		dst = seg->_dst.clone();
+		dst_temp = seg->_dst.clone();
 		repaint();
 	}
 	if (cmd == "gco-all"){
@@ -346,6 +346,10 @@ void FacBuilding::on_this_sendCmd(QString commd){
 			//connect(testLabel, SIGNAL(mousepress(QPoint)), this, SLOT(on_ImageLabel_mouseClick(QPoint)));//connect user select}
 			connect(testLabel, SIGNAL(mouserelease(vector<QPoint>&)), this, SLOT(on_ImageLabel_mouseRelease(vector<QPoint>&)));//connect user stroke
 			connect(testLabel, SIGNAL(mousemove(QPoint,QPoint)), this, SLOT(on_ImageLabel_mouseDrag(QPoint, QPoint)));//connect user stroke
+
+			connect(resultLabel, SIGNAL(mouserelease(vector<QPoint>&)), this, SLOT(on_ImageLabel_mouseRelease(vector<QPoint>&)));//connect user stroke
+			connect(resultLabel, SIGNAL(mousemove(QPoint, QPoint)), this, SLOT(on_ImageLabel_mouseDrag(QPoint, QPoint)));//connect user stroke
+
 			this->command->append(tr("please drag some segments...."));
 		}
 		else{
@@ -358,6 +362,9 @@ void FacBuilding::on_this_sendCmd(QString commd){
 
 		//disconnect(testLabel, SIGNAL(mousepress(QPoint)), 0,0);//connect user select}
 		disconnect(testLabel, SIGNAL(mouserelease(vector<QPoint>&)), 0, 0);//connect user select
+		disconnect(testLabel, SIGNAL(mousemove(QPoint, QPoint)), 0, 0);//connect user select
+		disconnect(resultLabel, SIGNAL(mouserelease(vector<QPoint>&)), 0, 0);//connect user select
+		disconnect(resultLabel, SIGNAL(mousemove(QPoint, QPoint)), 0, 0);//connect user select
 		this->command->append(tr("segmenting... done!"));
 		showSegment(src, _axis);
 	}		
@@ -419,11 +426,11 @@ void FacBuilding::on_this_sendCmd(QString commd){
 
 	if (cmd == "label"){
 		this->command->append(tr("User stroke for labeling each region.\n")+
-								 tr("1 => depth:30			\n")+
-								 tr("2 => depth:100			\n") +
-								 tr("3 => depth:170			\n") +
-								 tr("4 => depth:200			\n") +
-								 tr("5 => depth:230			\n") +
+								 tr("0 => depth:30			\n")+
+								 tr("1 => depth:100			\n") +
+								 tr("2 => depth:170			\n") +
+								 tr("3 => depth:200			\n") +
+								 tr("4 => depth:230			\n") +
 								 tr("Causion!! your following stroke will not overlap previous label.") );
 
 		if (seg == NULL)
@@ -494,7 +501,7 @@ void FacBuilding::keyPressEvent(QKeyEvent* e){
 		src_temp = seg->_src;
 		repaint();
 		break;
-	case Qt::Key_Enter:
+	case Qt::Key_Return:
 		seg->saveLabels("data\\training\\label\\");
 		src_temp = seg->_src;
 		repaint();
@@ -533,19 +540,24 @@ void FacBuilding::on_ImageLabel_mouseDrag(QPoint start, QPoint end){
 		int ax = seg->getBestSegAxis('x', (s.y() + e.y()) / 2);
 		_axis.push_back(std::pair<char, int>('x', ax));
 	}
-		
+
 	else{
 		int ax = seg->getBestSegAxis('y', (s.x() + e.x()) / 2);
-		_axis.push_back(std::pair<char, int>('y',ax));
+		_axis.push_back(std::pair<char, int>('y', ax));
 	}
-		
+
 	line(src_temp, Point(s.x(), s.y()), Point(e.x(), e.y()), Scalar(0, 255, 0), 2, CV_AA);
+	line(dst_temp, Point(s.x(), s.y()), Point(e.x(), e.y()), Scalar(0, 255, 0), 2, CV_AA);
+
+	imwrite("data\\result\\" + (seg->_baseName) + "_stroke.jpg",src_temp);
 	repaint();
 	//imshow("src_temp", src_temp); waitKey(0);
 }
 
+//interactive segment
 void FacBuilding::on_ImageLabel_mouseRelease(vector<QPoint>& points){
-
+	
+	seg->addUserHint(Utility::tocvPoints(points));
 	repaint();
 }
 
@@ -559,24 +571,24 @@ void FacBuilding::repaint(){
 		QImage simage = Utility::MatToQImage(src_temp);
 		testLabel->setPixmap(QPixmap::fromImage(simage));
 	}
-	if (dst_temp.rows > 0 && dst_temp.cols > 0){
+	if (dst.rows > 0 && dst.cols > 0){
 		/*Mat tempT = Mat(labelsize, CV_8UC3);
 		cv::resize(dst_temp, tempT, labelsize);
 		QImage dimage = Utility::MatToQImage(tempT);
 		tempLabel->setPixmap(QPixmap::fromImage(dimage));*/
-		tempLabel->resize(dst_temp.cols, dst_temp.rows);
-		QImage simage = Utility::MatToQImage(dst_temp);
+		tempLabel->resize(dst.cols, dst.rows);
+		QImage simage = Utility::MatToQImage(dst);
 		tempLabel->setPixmap(QPixmap::fromImage(simage));
 	}
 	
 
-	if (dst.rows > 0 && dst.cols > 0){
+	if (dst_temp.rows > 0 && dst_temp.cols > 0){
 		/*Mat tempD = Mat(labelsize, CV_8UC3);
 		cv::resize(dst, tempD, labelsize);
 		QImage dimage = Utility::MatToQImage(tempD);
 		resultLabel->setPixmap(QPixmap::fromImage(dimage));*/
-		resultLabel->resize(dst.cols, dst.rows);
-		QImage simage = Utility::MatToQImage(dst);
+		resultLabel->resize(dst_temp.cols, dst_temp.rows);
+		QImage simage = Utility::MatToQImage(dst_temp);
 		resultLabel->setPixmap(QPixmap::fromImage(simage));
 	}
 		
@@ -634,10 +646,10 @@ void FacBuilding::on_rect_changed(QPoint tl, QPoint br){
 
 	testLabel->user_br = br;
 
-	line(src_temp, Point(tl.x(), tl.y()), Point(br.x(), tl.y()), Scalar(0, 0, 255), 1, CV_AA);
-	line(src_temp, Point(tl.x(), tl.y()), Point(tl.x(), br.y()), Scalar(0, 0, 255), 1, CV_AA);
-	line(src_temp, Point(br.x(), br.y()), Point(br.x(), tl.y()), Scalar(0, 0, 255), 1, CV_AA);
-	line(src_temp, Point(br.x(), br.y()), Point(tl.x(), br.y()), Scalar(0, 0, 255), 1, CV_AA);
+	line(src_temp, Point(tl.x(), tl.y()), Point(br.x(), tl.y()), Scalar(0, 255, 0), 1, CV_AA);
+	line(src_temp, Point(tl.x(), tl.y()), Point(tl.x(), br.y()), Scalar(0, 255, 0), 1, CV_AA);
+	line(src_temp, Point(br.x(), br.y()), Point(br.x(), tl.y()), Scalar(0, 255, 0), 1, CV_AA);
+	line(src_temp, Point(br.x(), br.y()), Point(tl.x(), br.y()), Scalar(0, 255, 0), 1, CV_AA);
 	repaint();
 }
 
@@ -662,7 +674,9 @@ void FacBuilding::on_user_selected(QPoint tl, QPoint br){
 				"2 => depth:200			\n" \
 				"3 => depth:230			\n" \
 				"4 => depth:170			\n" \
-				"enter for next. \n" \
+				"enter==>> save \n" \
+				"space==>> next \n" \
+				"back space==>> previous \n" \
 				"Causion!! your following stroke will not overlap previous label.\n");
 
 	QtApi.sendMsg("select label (0,1,2,3,4)\n");
